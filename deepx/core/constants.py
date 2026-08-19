@@ -50,12 +50,6 @@ MAX_EMPTY_RESPONSE_RETRIES = 2
 # The conversation already contains the original request. Repeat it only
 # occasionally during unusually long autonomous runs to prevent goal drift.
 TASK_GOAL_REMINDER_INTERVAL = 8
-VOICE_HOTKEY_VK = 0xA3  # Right Ctrl
-VOICE_HOTKEY_LABEL = "правый Ctrl"
-VOICE_HOLD_SECONDS = 0.5
-VOICE_SAMPLE_RATE = 16000
-VOICE_PARTIAL_INTERVAL = 1.25
-VOICE_MODEL_NAME = os.environ.get("DEEPX_VOICE_MODEL", "base")
 
 # Agent execution discipline. These rules are injected by the runner and do
 # not modify the editable base prompts.
