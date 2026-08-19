@@ -1,0 +1,18 @@
+﻿# Core Terminal & UI
+rich>=13.7.0
+prompt_toolkit>=3.0.40
+pyperclip>=1.8.2
+
+# Browser Automation & Stealth
+playwright>=1.40.0
+playwright-stealth>=2.0.0
+
+# Networking & Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Document Processing (Office Suite)
+openpyxl>=3.1.2
+pandas>=2.0.0
+python-docx>=1.1.0
+python-pptx>=0.6.23

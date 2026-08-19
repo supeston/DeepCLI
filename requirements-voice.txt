@@ -1,0 +1,7 @@
+﻿-r requirements.txt
+
+# Push-to-Talk Voice Transcription (Whisper)
+numpy>=1.24.0
+sounddevice>=0.4.6
+openai-whisper>=20231117
+torch>=2.0.0

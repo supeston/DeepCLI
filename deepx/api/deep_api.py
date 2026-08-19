@@ -6,6 +6,28 @@ from playwright.async_api import async_playwright
 
 
 COMPLETE_TOOL_CALL_STALL_SECONDS = 4.0
+# DeepSeek can reuse an existing message container between agent turns.  In
+# that case waiting a full minute for a newly attached response node only
+# delays the fallback to the latest message; it does not improve recovery.
+RESPONSE_ELEMENT_ATTACH_TIMEOUT_MS = 5000
+
+
+_THINK_STATUS_RE = re.compile(
+    r"^[ \t]*(?:(?:\u0420\u0430\u0437\u043c\u044b\u0448\u043b\u0435\u043d\u0438\u0435|\u0420\u0430\u0437\u043c\u044b\u0448\u043b\u044f\u043b|\u0414\u0443\u043c\u0430\u043b)"
+    r"\s+\d+(?:[.,]\d+)?\s+(?:\u0441\u0435\u043a\u0443\u043d\u0434(?:\u0443|\u044b|\u0430)?|\u0441)"
+    r"|(?:Thought|Thinking)\s+(?:for\s+)?\d+(?:[.,]\d+)?\s*(?:seconds?|s))\.?[ \t]*(?:\r?\n)?",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _separate_reasoning(think: str, answer: str) -> tuple[str, str]:
+    """Keep UI reasoning/status text out of the executable answer channel."""
+    think_value = _THINK_STATUS_RE.sub("", str(think or "")).strip()
+    answer_value = str(answer or "").strip()
+    answer_value = _THINK_STATUS_RE.sub("", answer_value).strip()
+    if think_value and answer_value.startswith(think_value):
+        answer_value = answer_value[len(think_value):].lstrip()
+    return think_value, answer_value
 
 
 def _has_complete_tool_call(text: str) -> bool:
@@ -14,11 +36,13 @@ def _has_complete_tool_call(text: str) -> bool:
     return bool(
         re.search(r"```tool_call\s*\n?.+?\n?```", value, re.DOTALL)
         or re.search(r"<tool_call>\s*.+?\s*</tool_call>", value, re.DOTALL)
+        or re.search(r"<tool_calls>\s*.+?\s*</tool_calls>", value, re.DOTALL)
+        or re.search(r"<invoke\b.+?</invoke\s*>", value, re.DOTALL)
     )
 
 
 class DeepAPI:
-    def __init__(self, state_file: str = "state.json", headless: bool = False):
+    def __init__(self, state_file: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "state.json"), headless: bool = False):
         self.state_file = state_file
         self.headless = headless
         self.playwright = None
@@ -180,6 +204,13 @@ class DeepAPI:
                 pass
 
     async def _get_element(self, labels: list):
+        if not self.page or self.page.is_closed():
+            try:
+                await self.start()
+            except Exception:
+                return None
+        if not self.page:
+            return None
         for label in labels:
             btn = self.page.get_by_role("button", name=label, exact=True)
             if await btn.count() > 0:
@@ -419,6 +450,13 @@ class DeepAPI:
         return False
 
     async def new_chat(self):
+        if not self.page or self.page.is_closed():
+            try:
+                await self.start()
+            except Exception:
+                return False
+        if not self.page:
+            return False
         labels = ["Новый чат", "New chat", "New Chat"]
         for label in labels:
             element = self.page.get_by_text(label, exact=False).first
@@ -465,7 +503,7 @@ class DeepAPI:
 
     async def extract_response_data(self, container_locator, is_generating: bool = False):
         try:
-            return await container_locator.evaluate("""
+            data = await container_locator.evaluate("""
                 (el, isGenerating) => {
                     const hasContentAfter = (node) => {
                         let next = node.nextSibling;
@@ -685,7 +723,15 @@ class DeepAPI:
                         return Array.from(node.childNodes).map(c => domToMarkdown(c)).join("");
                     };
 
-                    const thinkEl = el.querySelector(".ds-think-content") || el.querySelector("[class*='think']");
+                    const isThinkElement = (node) => Boolean(
+                        node && node.matches && (
+                            node.matches(".ds-think-content") ||
+                            node.matches("[class*='think']")
+                        )
+                    );
+                    const thinkEl = isThinkElement(el)
+                        ? el
+                        : (el.querySelector(".ds-think-content") || el.querySelector("[class*='think']"));
                     let thinkText = "";
                     if (thinkEl) {
                         thinkText = domToMarkdown(thinkEl).replace(/\\n{3,}/g, "\\n\\n").trim();
@@ -693,13 +739,19 @@ class DeepAPI:
 
                     let mainEl = el.querySelector(".ds-assistant-message-main-content");
                     if (!mainEl) {
-                        const markdowns = Array.from(el.querySelectorAll(".ds-markdown")).filter(m => !thinkEl || !thinkEl.contains(m));
-                        mainEl = markdowns[0] || el;
+                        const markdowns = Array.from(el.querySelectorAll(".ds-markdown")).filter(m =>
+                            !isThinkElement(m) && !m.closest(".ds-think-content, [class*='think']")
+                        );
+                        mainEl = markdowns[0] || (thinkEl ? null : el);
+                    }
+
+                    if (!mainEl || isThinkElement(mainEl)) {
+                        return { think: thinkText, answer: "" };
                     }
 
                     const cloneMain = mainEl.cloneNode(true);
-                    const thinkInClone = cloneMain.querySelector(".ds-think-content") || cloneMain.querySelector("[class*='think']");
-                    if (thinkInClone) thinkInClone.remove();
+                    Array.from(cloneMain.querySelectorAll(".ds-think-content, [class*='think']"))
+                        .forEach(node => node.remove());
 
                     Array.from(cloneMain.querySelectorAll("*")).forEach(child => {
                         const childText = (child.textContent || "")
@@ -761,6 +813,12 @@ class DeepAPI:
                     };
                 }
             """, is_generating)
+            if not isinstance(data, dict):
+                return {"think": "", "answer": ""}
+            think, answer = _separate_reasoning(
+                data.get("think", ""), data.get("answer", "")
+            )
+            return {"think": think, "answer": answer}
         except Exception:
             return {"think": "", "answer": ""}
 
@@ -784,7 +842,10 @@ class DeepAPI:
         new_el = self.page.locator(".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])").first
         
         try:
-            await new_el.wait_for(state="attached", timeout=60000)
+            await new_el.wait_for(
+                state="attached",
+                timeout=RESPONSE_ELEMENT_ATTACH_TIMEOUT_MS,
+            )
             target_container = new_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
             if await target_container.count() == 0:
                 target_container = new_el.locator("xpath=../..")
@@ -863,12 +924,9 @@ class DeepAPI:
                 await asyncio.sleep(0.05)
 
             data = await self.extract_response_data(target_container, is_generating=False)
-            res = ""
-            if data["think"]:
-                res += f"--- [РАЗМЫШЛЕНИЯ] ---\n{data['think']}\n\n"
-            if data["answer"]:
-                res += data['answer']
-            return res if res else data["answer"]
+            # Reasoning is telemetry-only; non-streaming consumers also get
+            # the answer channel and can never execute or display reasoning.
+            return data["answer"]
 
         async def generator():
             last_text_state = ""

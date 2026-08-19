@@ -1,19 +1,47 @@
-# Exclude all JSON files
-*.json
+﻿# Environment & Secrets (NEVER COMMIT)
+.env
+**/.env
+*.env
+**/*.env
+!.env.example
+
+# Authentication & State
+state.json
+**/state.json
+*.state.json
+**/*.state.json
+.deepx_browser_state.json
+**/.deepx_browser_state.json
+.deepx_project_memory.json
+**/.deepx_project_memory.json
+
+# Generated Data & Downloads
+dadata_logos/
+**/dadata_logos/
+downloads/
+temp/
+tmp/
 
 # Python cache & build
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
+*.so
+build/
+dist/
+*.egg-info/
 
-# Environments
-.env.local
-.venv
+# Virtual Environments
+.venv/
 venv/
 ENV/
+env/
 
-# OS / IDE
+# IDE & OS
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp
+*.swo
