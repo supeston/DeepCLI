@@ -13,7 +13,7 @@ interface Particle {
   isDash: boolean;
 }
 
-export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className = '' }) => {
+export const ParticleCanvas: React.FC<{ className?: string }> = ({ className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx || typeof ctx.save !== 'function') return;
 
     let animationFrameId: number;
     let width = (canvas.width = window.innerWidth);
@@ -62,8 +62,9 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
     };
 
     const handleMouseLeave = () => {
@@ -76,81 +77,95 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     document.addEventListener('mouseleave', handleMouseLeave);
 
     const render = () => {
-      if (ctx.clearRect) {
-        ctx.clearRect(0, 0, width, height);
-      }
+      ctx.clearRect(0, 0, width, height);
 
-      // Update & Draw particles
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
-        // Move
+        // Normal drift movement
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.rotationSpeed;
 
-        // Wrap edges
+        // Wrap around boundaries
         if (p.x < 0) p.x = width;
         if (p.x > width) p.x = 0;
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
 
-        // Mouse Antigravity physics (repulsion)
+        // Particle physics (repulsion from cursor)
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < mouse.radius && dist > 0) {
+        if (dist < mouse.radius) {
           const force = (mouse.radius - dist) / mouse.radius;
           const angle = Math.atan2(dy, dx);
-          p.x -= Math.cos(angle) * force * 5;
-          p.y -= Math.sin(angle) * force * 5;
+          p.x -= Math.cos(angle) * force * 3;
+          p.y -= Math.sin(angle) * force * 3;
         }
 
-        // Draw particle (micro dots and dashes like Antigravity)
-        if (ctx.save && ctx.restore) {
-          ctx.save();
-          if (ctx.translate) ctx.translate(p.x, p.y);
-          if (ctx.rotate) ctx.rotate(p.rotation);
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.alpha;
+        // Draw particle (micro dots and dashes)
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
 
-          if (p.isDash && ctx.fillRect) {
-            ctx.fillRect(-p.size, -0.75, p.size * 2, 1.5);
-          } else if (ctx.beginPath && ctx.arc && ctx.fill) {
+        if (p.isDash) {
+          ctx.beginPath();
+          ctx.roundRect(-p.size * 2, -p.size / 2, p.size * 4, p.size, 1);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      // Draw subtle connecting lines between close particles
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const p1 = particles[i];
+          const p2 = particles[j];
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 60) {
+            ctx.save();
             ctx.beginPath();
-            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = '#536DFE';
+            ctx.globalAlpha = (1 - dist / 60) * 0.15;
+            ctx.lineWidth = 0.6;
+            ctx.stroke();
+            ctx.restore();
           }
-
-          ctx.restore();
-        } else if (ctx.fillRect) {
-          ctx.fillStyle = p.color;
-          ctx.fillRect(p.x, p.y, p.size, p.size);
         }
       }
 
-      if (ctx.globalAlpha !== undefined) {
-        ctx.globalAlpha = 1.0;
-      }
       animationFrameId = requestAnimationFrame(render);
     };
 
     render();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseleave', handleMouseLeave);
+      cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      data-testid="antigravity-canvas"
-      className={`pointer-events-none fixed inset-0 z-0 ${className}`}
+      data-testid="particle-canvas"
+      className={`fixed inset-0 pointer-events-none z-0 opacity-70 ${className}`}
     />
   );
 };

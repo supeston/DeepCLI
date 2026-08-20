@@ -30,7 +30,7 @@ export const ComparisonTable: React.FC = () => {
         </div>
 
         <ScrollReveal direction="up" delay={300}>
-          <div className="antigravity-card overflow-hidden">
+          <div className="deepx-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>

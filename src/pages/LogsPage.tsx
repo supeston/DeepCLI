@@ -11,7 +11,7 @@ export const LogsPage: React.FC = () => {
         'Added Syntax Highlighting for code blocks in Terminal Simulator.',
         'Introduced two complex scenarios: Docker OOM Debugging and Git Conflict Resolution.',
         'Refined Navbar UI dropdown logic with improved hover-bridge.',
-        'Antigravity typography scroll animations applied across the platform.',
+        'Dynamic typography scroll reveal animations applied across the platform.',
         'Brand identity solidified strictly as DeepX, maintaining the authentic #536DFE aesthetics.'
       ]
     },

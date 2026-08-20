@@ -30,7 +30,7 @@ export const HeroSection: React.FC = () => {
             </div>
           </ScrollReveal>
 
-          {/* Main Headline with Antigravity Typography */}
+          {/* Main Headline */}
           <ScrollReveal direction="up" delay={200}>
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-6 leading-[1.08]">
               Experience liftoff with the{' '}

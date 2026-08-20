@@ -53,7 +53,7 @@ export const UseCasesSection: React.FC = () => {
             const Icon = c.icon;
             return (
               <ScrollReveal key={i} direction="up" delay={150 * (i + 1)}>
-                <div className="antigravity-card p-8 group cursor-pointer hover:-translate-y-1 transition-transform duration-300 h-full flex flex-col justify-between">
+                <div className="deepx-card p-8 group cursor-pointer hover:-translate-y-1 transition-transform duration-300 h-full flex flex-col justify-between">
                   <div>
                     <div className={`w-14 h-14 rounded-2xl ${c.bg} flex items-center justify-center mb-6`}>
                       <Icon className={`w-7 h-7 ${c.color}`} />

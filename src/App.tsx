@@ -1,6 +1,6 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
-import { AntiGravityCanvas } from './components/AntiGravityCanvas';
+import { ParticleCanvas } from './components/ParticleCanvas';
 import { Footer } from './components/Footer';
 
 import { HomePage } from './pages/HomePage';
@@ -10,8 +10,8 @@ export function App() {
   return (
     <HashRouter>
       <div className="relative min-h-screen bg-white text-[#1F1F1F] selection:bg-[#536DFE]/20 selection:text-[#536DFE]">
-        {/* Google Antigravity Light Particle Field */}
-        <AntiGravityCanvas />
+        {/* DeepX Particle Field */}
+        <ParticleCanvas />
 
         {/* Navigation */}
         <Navbar />

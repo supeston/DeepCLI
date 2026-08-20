@@ -40,7 +40,7 @@ code, pre, .font-mono {
   background: #94a3b8;
 }
 
-/* Google Antigravity Button components */
+/* DeepX Button components */
 .google-btn-primary {
   background-color: #1F1F1F;
   color: #ffffff;
@@ -102,14 +102,14 @@ code, pre, .font-mono {
 }
 
 /* Card Surfaces */
-.antigravity-card {
+.deepx-card {
   background: #ffffff;
   border: 1px solid #E2E8F0;
   border-radius: 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.antigravity-card:hover {
+.deepx-card:hover {
   border-color: #536DFE;
   box-shadow: 0 10px 30px rgba(83, 109, 254, 0.08);
 }

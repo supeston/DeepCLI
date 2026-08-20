@@ -95,7 +95,7 @@ export const BentoGrid: React.FC = () => {
 
         {/* Active Feature Content */}
         <ScrollReveal direction="up" delay={350}>
-          <div className="antigravity-card p-8 sm:p-12 animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden">
+          <div className="deepx-card p-8 sm:p-12 animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden">
             <div className="grid lg:grid-cols-2 gap-12 items-center relative z-10">
               <div>
                 <h3 className="text-3xl font-normal text-[#1F1F1F] mb-6">
