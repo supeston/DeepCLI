@@ -5,18 +5,15 @@ export const Footer: React.FC = () => {
     <footer className="bg-white border-t border-gray-200 py-12" data-testid="site-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center">
             <img
-              src="logo.png"
-              alt="DeepX Square Logo"
-              className="w-8 h-8 rounded-lg shadow-sm"
+              src="full_logo.png"
+              alt="DeepX Full Logo"
+              className="h-9 sm:h-10 w-auto object-contain"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'log.png';
+                (e.target as HTMLImageElement).src = 'logo.png';
               }}
             />
-            <span className="text-xl font-medium tracking-tight text-gray-900">
-              DeepX
-            </span>
           </div>
 
           <div className="text-sm font-medium text-gray-500">

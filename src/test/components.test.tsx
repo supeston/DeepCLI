@@ -93,13 +93,13 @@ describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
 
-  it('renders Footer with creator attribution (supeston) and logo', () => {
+  it('renders Footer with creator attribution (supeston) and full_logo.png', () => {
     render(<Footer />);
     const authorLink = screen.getByTestId('footer-author-link');
     expect(authorLink).toHaveAttribute('href', 'https://github.com/supeston');
     expect(authorLink).toHaveTextContent('supeston');
 
-    const squareLogo = screen.getByAltText('DeepX Square Logo');
-    expect(squareLogo).toHaveAttribute('src', 'logo.png');
+    const fullLogo = screen.getByAltText('DeepX Full Logo');
+    expect(fullLogo).toHaveAttribute('src', 'full_logo.png');
   });
 });
