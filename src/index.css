@@ -120,3 +120,27 @@ code, pre, .font-mono {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* Animated Copy Border Beam */
+@keyframes copyBorderBeam {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+.animate-copy-beam {
+  stroke-dasharray: 40 60;
+  animation: copyBorderBeam 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

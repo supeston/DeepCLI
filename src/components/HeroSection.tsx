@@ -49,8 +49,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
   const typedSuffix = typedLength > PREFIX_TEXT.length ? FULL_TEXT.slice(PREFIX_TEXT.length, typedLength) : '';
 
   return (
-    <section className="relative pt-32 pb-16 md:pt-44 md:pb-24 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    <section className="relative min-h-[calc(100vh-2rem)] sm:min-h-screen flex flex-col justify-center items-center pt-28 pb-16 sm:pt-36 sm:pb-24 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
         <div className="text-center max-w-4xl mx-auto">
           {/* 1. Centered Brand Artwork - Slides down gracefully right after navbar items finish */}
           <div
@@ -109,22 +109,56 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             </button>
           </div>
 
-          {/* 4. 1-Click Code Box */}
+          {/* 4. 1-Click Code Box with Smooth Border Beam on Copy */}
           <div
-            className={`max-w-xl mx-auto mb-8 transition-all duration-600 ease-out delay-[1050ms] ${
+            className={`max-w-xl mx-auto mb-4 transition-all duration-600 ease-out delay-[1050ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 translate-y-6 pointer-events-none'
             }`}
           >
-            <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 shadow-lg shadow-gray-200/50">
+            <div
+              className={`relative flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 transition-all duration-300 ${
+                copied
+                  ? 'border-[#536DFE]/60 shadow-xl shadow-[#536DFE]/20'
+                  : 'shadow-lg shadow-gray-200/50'
+              }`}
+            >
+              {/* Animated SVG Border Beam */}
+              {copied && (
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none rounded-2xl z-20"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <defs>
+                    <linearGradient id="copy-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#536DFE" stopOpacity="1" />
+                      <stop offset="60%" stopColor="#38BDF8" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#536DFE" stopOpacity="0.2" />
+                    </linearGradient>
+                  </defs>
+                  <rect
+                    x="1"
+                    y="1"
+                    width="calc(100% - 2px)"
+                    height="calc(100% - 2px)"
+                    rx="16"
+                    fill="none"
+                    stroke="url(#copy-beam-grad)"
+                    strokeWidth="2.5"
+                    pathLength="100"
+                    className="animate-copy-beam"
+                  />
+                </svg>
+              )}
+
               <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
                 <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
                 <span className="truncate">{installCmd}</span>
               </div>
               <button
                 onClick={handleCopy}
-                className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+                className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0 z-30"
                 aria-label="Copy install command"
                 data-testid="hero-copy-cmd-btn"
               >
