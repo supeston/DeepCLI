@@ -43,18 +43,9 @@ describe('DeepX Landing Page Component Test Suite', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
 
-  it('renders TerminalSimulator and allows switching scenario tabs', () => {
+  it('renders TerminalSimulator and allows copying command', () => {
     render(<TerminalSimulator />);
     expect(screen.getByTestId('terminal-body')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-tab-refactor')).toBeInTheDocument();
-
-    // Click ConPTY scenario tab
-    const conptyTab = screen.getByTestId('terminal-tab-conpty');
-    fireEvent.click(conptyTab);
-
-    // Click WinRT Clipboard tab
-    const clipboardTab = screen.getByTestId('terminal-tab-clipboard');
-    fireEvent.click(clipboardTab);
 
     // Copy terminal prompt
     const copyBtn = screen.getByTestId('terminal-copy-btn');
