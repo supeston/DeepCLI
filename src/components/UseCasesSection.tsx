@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layout, Database, Code2, ArrowRight } from 'lucide-react';
+import { ScrollReveal, TextScrollReveal } from './ScrollReveal';
 
 export const UseCasesSection: React.FC = () => {
   const cases = [
@@ -30,69 +31,83 @@ export const UseCasesSection: React.FC = () => {
   ];
 
   return (
-    <section id="usecases" className="py-24 bg-slate-50 border-y border-slate-200">
+    <section id="usecases" className="py-24 bg-slate-50 border-y border-slate-200 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl sm:text-4xl font-normal text-[#1F1F1F] tracking-tight mb-4">
-            Designed for every engineering workflow
-          </h2>
-          <p className="text-[#5F6368] text-lg">
-            Whether you are scaffolding a new web app or modernizing a legacy system, DeepX adapts to your tech stack via natural language commands.
-          </p>
+          <ScrollReveal direction="up" delay={100}>
+            <h2 className="text-3xl sm:text-4xl font-normal text-[#1F1F1F] tracking-tight mb-4">
+              Designed for every engineering workflow
+            </h2>
+          </ScrollReveal>
+          <ScrollReveal direction="up" delay={200}>
+            <TextScrollReveal
+              text="Whether you are scaffolding a new web app or modernizing a legacy system, DeepX adapts to your tech stack via natural language commands."
+              className="text-[#5F6368] text-lg font-normal"
+              highlightWords={['scaffolding', 'modernizing', 'DeepX', 'natural', 'language']}
+            />
+          </ScrollReveal>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
           {cases.map((c, i) => {
             const Icon = c.icon;
             return (
-              <div
-                key={i}
-                className="antigravity-card p-8 group cursor-pointer hover:-translate-y-1 transition-transform duration-300"
-              >
-                <div className={`w-14 h-14 rounded-2xl ${c.bg} flex items-center justify-center mb-6`}>
-                  <Icon className={`w-7 h-7 ${c.color}`} />
+              <ScrollReveal key={i} direction="up" delay={150 * (i + 1)}>
+                <div className="antigravity-card p-8 group cursor-pointer hover:-translate-y-1 transition-transform duration-300 h-full flex flex-col justify-between">
+                  <div>
+                    <div className={`w-14 h-14 rounded-2xl ${c.bg} flex items-center justify-center mb-6`}>
+                      <Icon className={`w-7 h-7 ${c.color}`} />
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-900 mb-3 group-hover:text-[#536DFE] transition-colors">
+                      {c.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-6">
+                      {c.desc}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {c.tags.map((t) => (
+                        <span
+                          key={t}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#536DFE] opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                      <span>Explore use case</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-medium text-gray-900 mb-3 group-hover:text-[#536DFE] transition-colors">
-                  {c.title}
-                </h3>
-                <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                  {c.desc}
-                </p>
-                <div className="flex flex-wrap gap-2 mb-8">
-                  {c.tags.map((t) => (
-                    <span key={t} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 text-sm font-medium text-[#536DFE] opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                  <span>Explore use case</span>
-                  <ArrowRight className="w-4 h-4" />
-                </div>
-              </div>
+              </ScrollReveal>
             );
           })}
         </div>
 
         {/* Free Tier Banner */}
-        <div className="mt-16 rounded-3xl bg-white border border-slate-200 p-8 sm:p-12 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
-          <div>
-            <h3 className="text-2xl font-normal text-[#1F1F1F] mb-2">
-              Open Source & Free for Developers
-            </h3>
-            <p className="text-[#5F6368]">
-              DeepX is available at no charge under the MIT License. Run it locally with your own API keys.
-            </p>
+        <ScrollReveal direction="up" delay={400}>
+          <div className="mt-16 rounded-3xl bg-white border border-slate-200 p-8 sm:p-12 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
+            <div>
+              <h3 className="text-2xl font-normal text-[#1F1F1F] mb-2">
+                Open Source & Free for Developers
+              </h3>
+              <p className="text-[#5F6368]">
+                DeepX is available at no charge under the MIT License. Run it locally with your own API keys.
+              </p>
+            </div>
+            <a
+              href="https://github.com/supeston/DeepCLI"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 google-btn-secondary"
+            >
+              View on GitHub
+            </a>
           </div>
-          <a
-            href="https://github.com/supeston/DeepCLI"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 google-btn-secondary"
-          >
-            View on GitHub
-          </a>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   );
