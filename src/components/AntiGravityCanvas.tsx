@@ -33,8 +33,8 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
       radius: 160,
     };
 
-    // Palette inspired by DeepX CLI (#536DFE, #38BDF8, #A78BFA, subtle coral & gold)
-    const colors = ['#536DFE', '#38BDF8', '#818CF8', '#A78BFA', '#F43F5E', '#F59E0B'];
+    // Single CLI primary color (#536DFE)
+    const colors = ['#536DFE'];
 
     const particleCount = Math.min(Math.floor((width * height) / 8000), 160);
     const particles: Particle[] = [];
