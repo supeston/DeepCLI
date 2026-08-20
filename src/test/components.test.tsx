@@ -18,24 +18,20 @@ describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
     expect(screen.getByTestId('site-footer')).toBeInTheDocument();
   });
 
-  it('renders Navbar with logo asset, correct alt attribute, and navigation links', () => {
+  it('renders Navbar with full_logo.png asset, correct alt attribute, and navigation links', () => {
     render(<Navbar />);
     const logoImg = screen.getByAltText('DeepX Logo');
     expect(logoImg).toBeInTheDocument();
-    expect(logoImg).toHaveAttribute('src', 'log.png');
+    expect(logoImg).toHaveAttribute('src', 'full_logo.png');
 
     const githubLink = screen.getByTestId('github-link');
     expect(githubLink).toHaveAttribute('href', 'https://github.com/supeston/DeepCLI');
   });
 
-  it('renders HeroSection with transparent log.png and copy install button', () => {
+  it('renders HeroSection with headline, DeepX text, and copy install button', () => {
     render(<HeroSection />);
     expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
     expect(screen.getAllByText(/DeepX/i).length).toBeGreaterThan(0);
-
-    const heroLogImg = screen.getByAltText('DeepX Transparent Logo');
-    expect(heroLogImg).toBeInTheDocument();
-    expect(heroLogImg).toHaveAttribute('src', 'log.png');
 
     const copyBtn = screen.getByTestId('hero-copy-cmd-btn');
     expect(copyBtn).toBeInTheDocument();

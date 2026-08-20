@@ -12,26 +12,18 @@ export const Navbar: React.FC = () => {
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between">
-          {/* Left: Brand Logo & Pills */}
-          <div className="flex items-center gap-4">
-            <a href="/" className="flex items-center gap-2 group">
+          {/* Left: Brand Logo (full_logo.png only) */}
+          <div className="flex items-center">
+            <a href="/" className="flex items-center group">
               <img
-                src="log.png"
+                src="full_logo.png"
                 alt="DeepX Logo"
-                className="h-7 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                className="h-8 sm:h-9 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'logo.png';
                 }}
               />
-              <span className="text-2xl font-medium tracking-tight text-gray-900 group-hover:text-[#1a73e8] transition-colors">
-                deepx
-              </span>
             </a>
-
-            {/* Antigravity style pill */}
-            <div className="hidden md:flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#1a73e8]/10 text-[#1a73e8] border border-[#1a73e8]/20">
-              DeepX 2.6
-            </div>
           </div>
 
           {/* Middle Navigation (Desktop) */}

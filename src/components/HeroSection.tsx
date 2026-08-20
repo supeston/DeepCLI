@@ -15,19 +15,6 @@ export const HeroSection: React.FC = () => {
     <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-4xl mx-auto">
-          {/* Logo Showcase */}
-          <div className="relative inline-block mb-8">
-            <div className="absolute inset-0 bg-[#1a73e8]/5 rounded-full blur-3xl pointer-events-none w-32 h-32" />
-            <img
-              src="log.png"
-              alt="DeepX Transparent Logo"
-              className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 mx-auto object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'logo.png';
-              }}
-            />
-          </div>
-
           {/* DeepX Pill Label */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-[#1a73e8]/10 border border-[#1a73e8]/20 text-[#1a73e8] mb-8 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#1a73e8]" />
