@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal as TermIcon, Copy, Check, MousePointerClick, Maximize2, X, Minus } from 'lucide-react';
+import { Terminal as TermIcon, Copy, Check, MousePointerClick, Maximize2 } from 'lucide-react';
 
 type TerminalScenario = 'conpty' | 'clipboard' | 'media';
 
