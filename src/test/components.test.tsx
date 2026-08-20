@@ -28,7 +28,7 @@ describe('DeepX Landing Page Component Test Suite', () => {
     expect(githubLink).toHaveAttribute('href', 'https://github.com/supeston/DeepCLI');
   });
 
-  it('renders HeroSection with Google Antigravity headline, DeepX artwork, and copy install button', () => {
+  it('renders HeroSection with DeepX headline, DeepX artwork, and copy install button', () => {
     render(<HeroSection />);
     expect(screen.getByText(/Experience liftoff with the/i)).toBeInTheDocument();
     expect(screen.getByText(/next-gen agent platform/i)).toBeInTheDocument();
