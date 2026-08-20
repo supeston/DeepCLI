@@ -2,8 +2,6 @@ import asyncio
 import concurrent.futures
 import ctypes
 import difflib
-from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
 import json
 import os
 import py_compile
@@ -12,40 +10,32 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import textwrap
 import unicodedata
+from datetime import datetime, timezone
 from pathlib import Path
-
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
-from deepx.tools.dadata_osint import DadataOSINTTool
-from deepx.tools.funstat_osint import FunstatOSINTTool
-
-                                                                                
-                    
-                                                                                
+from typing import Any, Dict, List, Optional, Tuple
 
 from deepx.core.constants import *
 from deepx.core.config import *
 from deepx.ui.markup import *
 from deepx.ui.terminal import console
+from deepx.tools.terminal_session import PtySessionManager, WINPTY_AVAILABLE
+
 
 class SystemToolsMixin:
+    """System interaction tools including ConPTY interactive terminal and background tasks."""
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+    @property
+    def pty_manager(self) -> PtySessionManager:
+        if not hasattr(self, "_pty_manager"):
+            self._pty_manager = PtySessionManager()
+        return self._pty_manager
+
     def _is_direct_executable_launch(self, command: str) -> bool:
         """Detect a foreground launch of an executable in the last cmd segment."""
         if sys.platform != "win32":
@@ -53,7 +43,6 @@ class SystemToolsMixin:
         tail = re.split(r"&&|\|\||[&|]", str(command or ""))[-1].strip()
         if not tail:
             return False
-        # Exclude commands that merely inspect or manipulate an .exe path.
         first = tail.split(None, 1)[0].strip('"').lower()
         cmd_builtins = {
             "dir", "where", "type", "copy", "move", "del", "erase",
@@ -64,12 +53,40 @@ class SystemToolsMixin:
         )
 
     def run_cmd(self, command: str, inputs: str = None) -> str:
-                                                         
+        """Execute command in Windows ConPTY pseudo-terminal with interactive prompt detection."""
+        if not command or not str(command).strip():
+            return "[Error: run_cmd requires a 'command' argument]"
+
         if self._command_touches_self(command) or self._command_touches_self(inputs):
             return self._deny("command referencing DEEPX application files")
         kill_guard = self._process_kill_guard(command)
         if kill_guard:
             return f"[Error: {kill_guard}]"
+
+        # ConPTY Engine Execution
+        if WINPTY_AVAILABLE:
+            try:
+                child_env = os.environ.copy()
+                child_env.pop("FUNSTAT_API_TOKEN", None)
+                child_env["PYTHONIOENCODING"] = "utf-8"
+                child_env["PYTHONUTF8"] = "1"
+
+                session, err = self.pty_manager.spawn(
+                    command=command,
+                    cwd=self.cwd,
+                    env=child_env,
+                    inputs=inputs,
+                )
+                if err:
+                    return f"[Error spawning ConPTY session: {err}]"
+
+                # Read output until completion or interactive prompt
+                return self.pty_manager.read_session_loop(session)
+            except Exception as pty_err:
+                # Fallback to subprocess on unexpected PTY spawn error
+                pass
+
+        # Subprocess Fallback
         try:
             executable_launch = self._is_direct_executable_launch(command)
             timeout_seconds = 10 if executable_launch else 60
@@ -90,7 +107,7 @@ class SystemToolsMixin:
                 encoding="utf-8",
                 errors="replace",
                 env=child_env,
-                timeout=timeout_seconds
+                timeout=timeout_seconds,
             )
             out = res.stdout
             if res.stderr:
@@ -113,10 +130,22 @@ class SystemToolsMixin:
         except Exception as e:
             return f"[Error executing command: {e}]"
 
+    def send_input(self, session_id: str, text: str = "") -> str:
+        """Send input to an active interactive ConPTY terminal session."""
+        if not session_id:
+            return "[Error: send_input requires a 'session_id' argument]"
+        return self.pty_manager.send_input(session_id, text)
+
+    def kill_cmd(self, session_id: str) -> str:
+        """Terminate an active interactive ConPTY terminal session."""
+        if not session_id:
+            return "[Error: kill_cmd requires a 'session_id' argument]"
+        return self.pty_manager.kill_session(session_id)
+
     def run_python(self, code: str) -> str:
-                                                                      
-        import tempfile
-        import os
+        """Execute Python code in an isolated temporary script."""
+        if not code or not str(code).strip():
+            return "[Error: run_python requires a 'code' argument]"
 
         if self._command_touches_self(code):
             return self._deny("Python code referencing DEEPX application files")
@@ -139,7 +168,7 @@ class SystemToolsMixin:
         fd, temp_path = tempfile.mkstemp(suffix=".py", dir=self.cwd)
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(code)
-            
+
         try:
             child_env = os.environ.copy()
             child_env.pop("FUNSTAT_API_TOKEN", None)
@@ -153,7 +182,7 @@ class SystemToolsMixin:
                 encoding="utf-8",
                 errors="replace",
                 env=child_env,
-                timeout=60
+                timeout=60,
             )
             out = res.stdout
             if res.stderr:
@@ -166,19 +195,20 @@ class SystemToolsMixin:
         except Exception as e:
             return f"[Error executing Python script: {e}]"
         finally:
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
 
-    def _assign_windows_kill_job(self, process):
+    def _assign_windows_kill_job(self, process) -> Optional[int]:
         if sys.platform != "win32":
             return None
 
         class JobObjectBasicLimitInformation(ctypes.Structure):
             _fields_ = [
-                ("PerProcessUserTimeLimit", ctypes.c_longlong),
-                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("PerProcessUserTimeLimit", ctypes.c_int64),
+                ("PerJobUserTimeLimit", ctypes.c_int64),
                 ("LimitFlags", ctypes.c_uint32),
                 ("MinimumWorkingSetSize", ctypes.c_size_t),
                 ("MaximumWorkingSetSize", ctypes.c_size_t),
@@ -252,8 +282,6 @@ class SystemToolsMixin:
     def _background_process_args(self, command: str):
         if sys.platform != "win32":
             return ["/bin/sh", "-lc", command], None
-
-        import tempfile
 
         fd, launcher_path = tempfile.mkstemp(
             prefix=".deepx-task-",
@@ -351,92 +379,95 @@ class SystemToolsMixin:
                 "log": "",
                 "launcher_path": launcher_path,
                 "job_handle": job_handle,
+                "reader_tasks": [],
+                "watcher": None,
             }
+            task["reader_tasks"] = [
+                asyncio.create_task(
+                    self._capture_background_stream(task_id, process.stdout, "")
+                ),
+                asyncio.create_task(
+                    self._capture_background_stream(task_id, process.stderr, "STDERR")
+                ),
+            ]
+            task["watcher"] = asyncio.create_task(
+                self._watch_background_task(task_id)
+            )
             self.active_tasks[task_id] = task
-            stdout_reader = asyncio.create_task(
-                self._capture_background_stream(task_id, process.stdout, "")
-            )
-            stderr_reader = asyncio.create_task(
-                self._capture_background_stream(task_id, process.stderr, "STDERR")
-            )
-            task["reader_tasks"] = (stdout_reader, stderr_reader)
-            task["watcher"] = asyncio.create_task(self._watch_background_task(task_id))
-
-            if inputs is not None and process.stdin is not None:
-                process.stdin.write(str(inputs).encode("utf-8"))
-                await process.stdin.drain()
-                process.stdin.close()
-
+            if inputs:
+                try:
+                    process.stdin.write(inputs.encode("utf-8"))
+                    await process.stdin.drain()
+                    process.stdin.close()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
             return (
-                f"[Success: Background task '{task_id}' started "
-                f"(PID {process.pid}). Use task_status/task_log with this id.]"
+                f"[Background task started]\n"
+                f"ID: {task_id}\n"
+                f"PID: {process.pid}\n"
+                f"Command: {command}\n"
+                f"Status: running\n"
+                f"Use task_status id=\"{task_id}\" or task_log id=\"{task_id}\"."
             )
-        except Exception as e:
+        except Exception as error:
             if launcher_path:
                 try:
                     os.remove(launcher_path)
                 except OSError:
                     pass
-            return f"[Error starting background command: {e}]"
+            return f"[Error starting background task: {type(error).__name__}: {error}]"
 
-    async def task_status(self, task_id: str) -> str:
-        task = self.active_tasks.get(str(task_id))
-        if task is None:
-            return f"[Error: Background task '{task_id}' not found]"
-        await asyncio.sleep(0)
-        returncode = task["process"].returncode
-        if returncode is None:
+    def task_status(self, id: str) -> str:
+        if not id:
+            return "[Error: task_status requires an 'id' argument]"
+        task = self.active_tasks.get(id)
+        if not task:
+            return f"[Error: Unknown background task '{id}']"
+        if task["ended_at"] is None:
             status = "running"
-        elif returncode == 0:
+        elif task["returncode"] == 0:
             status = "completed"
         else:
             status = "failed"
-        return (
-            f"[Background task '{task_id}': status={status}, PID={task['pid']}, "
-            f"exit_code={returncode}, started_at={task['started_at']}, "
-            f"ended_at={task.get('ended_at')}]"
-        )
+        report = [
+            f"[Background task status for '{id}']",
+            f"Command: {task['command']}",
+            f"PID: {task['pid']}",
+            f"Status: {status}",
+            f"Started: {task['started_at']}",
+        ]
+        if task["ended_at"]:
+            report.append(f"Ended: {task['ended_at']}")
+            report.append(f"Exit Code: {task['returncode']}")
+        report.append(f"Buffered Log Chars: {len(task['log']):,}")
+        return "\n".join(report)
 
-    async def task_log(self, task_id: str, tail_lines: int = 200) -> str:
-        task = self.active_tasks.get(str(task_id))
-        if task is None:
-            return f"[Error: Background task '{task_id}' not found]"
-        await asyncio.sleep(0)
+    def task_log(self, id: str, tail_lines: int = 200) -> str:
+        if not id:
+            return "[Error: task_log requires an 'id' argument]"
+        task = self.active_tasks.get(id)
+        if not task:
+            return f"[Error: Unknown background task '{id}']"
         try:
-            tail_lines = max(1, min(int(tail_lines), 5000))
+            tail_count = max(1, int(tail_lines))
         except (TypeError, ValueError):
-            tail_lines = 200
-        log = task["log"]
-        if not log:
-            state = "running" if task["process"].returncode is None else "finished"
-            return f"[Background task '{task_id}' has no output yet; status={state}]"
-        lines = log.splitlines()
-        shown = "\n".join(lines[-tail_lines:])
-        omitted = len(lines) - min(len(lines), tail_lines)
-        prefix = f"[Background task '{task_id}' log"
-        if omitted:
-            prefix += f"; {omitted} earlier line(s) omitted"
-        return f"{prefix}]\n{shown}"
+            tail_count = 200
+        lines = task["log"].splitlines()
+        selected = lines[-tail_count:] if lines else []
+        status = "running" if task["ended_at"] is None else "finished"
+        header = (
+            f"[Background task log for '{id}' ({status}, showing "
+            f"{len(selected)} of {len(lines)} lines)]:\n"
+        )
+        return header + ("\n".join(selected) if selected else "(No output recorded yet)")
 
     async def close_background_tasks(self):
-        running = [
-            task for task in self.active_tasks.values()
-            if task["process"].returncode is None
-        ]
-        for task in running:
-            try:
-                if sys.platform == "win32" and task.get("job_handle"):
-                    self._close_windows_kill_job(task)
-                elif sys.platform == "win32":
-                    task["process"].terminate()
-                else:
-                    os.killpg(os.getpgid(task["pid"]), signal.SIGTERM)
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
-        for task in running:
-            try:
-                await asyncio.wait_for(task["process"].wait(), timeout=3)
-            except asyncio.TimeoutError:
+        """Clean up PTY sessions and background tasks on shutdown."""
+        if hasattr(self, "_pty_manager"):
+            self._pty_manager.close_all()
+
+        for task in self.active_tasks.values():
+            if task.get("process") and task["process"].returncode is None:
                 try:
                     if sys.platform == "win32":
                         task["process"].kill()
@@ -461,10 +492,8 @@ class SystemToolsMixin:
                 await asyncio.gather(*watchers, return_exceptions=True)
 
     def sys_info(self) -> str:
-                                          
         return (
             f"OS: {sys.platform}\n"
             f"Python: {sys.version.split()[0]}\n"
             f"Working Directory: {self.cwd}"
         )
-

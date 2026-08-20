@@ -1,4 +1,4 @@
-﻿# Environment & Secrets (NEVER COMMIT)
+# Environment & Secrets (NEVER COMMIT)
 .env
 **/.env
 *.env
@@ -10,6 +10,8 @@ state.json
 **/state.json
 *.state.json
 **/*.state.json
+.deepx/
+**/.deepx/
 .deepx_browser_state.json
 **/.deepx_browser_state.json
 .deepx_project_memory.json

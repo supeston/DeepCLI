@@ -104,10 +104,6 @@ def print_help():
         table.add_row(f"/{cmd}", desc)
 
     console.print(table)
-    console.print(
-        "[bold #EF4444]Правый Ctrl (удерживать 0,5 секунды)[/bold #EF4444] — "
-        "локальная запись речи; отпусти Ctrl, затем нажми Enter для отправки."
-    )
 
 def print_status(mode: str, style: str, think: bool, search: bool, cwd: str, state_file: str):
                                         

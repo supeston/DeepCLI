@@ -88,7 +88,9 @@ MUTATING_TOOLS_REQUIRING_VERIFICATION = {
 VERIFICATION_TOOLS = {
     "read_file",
     "file_info",
+    "inspect_media",
     "run_cmd",
+    "send_input",
     "run_python",
     "task_status",
     "task_log",
@@ -100,6 +102,11 @@ VERIFICATION_TOOLS = {
 # Mutating tools remain ordering barriers so a later read observes earlier writes.
 PARALLEL_READ_ONLY_TOOLS = {
     "read_file",
+    "file_info",
+    "inspect_media",
+    "read_clipboard",
+    "get_clipboard_history",
+    "get_clipboard_item",
     "web_search",
     "fetch_url",
     "dadata_osint",

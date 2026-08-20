@@ -1236,6 +1236,38 @@ class DeepCLIApp:
                                 "\n\n[СИСТЕМА]: в списке задач нет ни одной активной. Отметь "
                                 "выполненные через complete и переведи текущую в active."
                             )
+                    interactive_prompt_detected = None
+                    for output in tool_outputs:
+                        if "WAITING_FOR_INPUT" in output:
+                            try:
+                                json_match = re.search(
+                                    r'\{[^{}]*"status"\s*:\s*"WAITING_FOR_INPUT"[^{}]*\}',
+                                    output,
+                                    re.DOTALL,
+                                )
+                                if json_match:
+                                    interactive_prompt_detected = json.loads(json_match.group(0))
+                                    break
+                            except Exception:
+                                pass
+
+                    if interactive_prompt_detected:
+                        session_id = interactive_prompt_detected.get("session_id", "unknown")
+                        accumulated_output = interactive_prompt_detected.get(
+                            "accumulated_output", ""
+                        )
+                        current_prompt = (
+                            "[INTERACTIVE TERMINAL PROMPT DETECTED]\n"
+                            f"Программа ожидает ввода в терминал (session_id=\"{session_id}\").\n"
+                            "Текущий вывод терминала:\n"
+                            "---\n"
+                            f"{accumulated_output}\n"
+                            "---\n"
+                            "Проанализируй вопрос терминала и вызови инструмент `send_input` с нужным текстом "
+                            "(обязательно заканчивай строку \\n, если требуется подтверждение Enter) или `kill_cmd`, "
+                            "если процесс зациклен."
+                        )
+                        continue
 
                     task_state = build_agent_task_state(
                         original_goal,

@@ -52,8 +52,20 @@ from .documents import DocumentsToolsMixin
 from .web import WebToolsMixin
 from .todo import TodoToolsMixin
 from .project import ProjectToolsMixin
+from .media_inspector import MediaInspectorMixin
+from .clipboard import ClipboardMixin
 
-class AgentTools(SystemToolsMixin, FileSystemToolsMixin, BrowserToolsMixin, DocumentsToolsMixin, WebToolsMixin, TodoToolsMixin, ProjectToolsMixin):
+class AgentTools(
+    SystemToolsMixin,
+    FileSystemToolsMixin,
+    BrowserToolsMixin,
+    DocumentsToolsMixin,
+    WebToolsMixin,
+    TodoToolsMixin,
+    ProjectToolsMixin,
+    MediaInspectorMixin,
+    ClipboardMixin,
+):
     def __init__(
         self,
         cwd: str = None,
@@ -204,6 +216,16 @@ class AgentTools(SystemToolsMixin, FileSystemToolsMixin, BrowserToolsMixin, Docu
             return await asyncio.to_thread(
                 self.run_cmd, args.get("command", ""), args.get("inputs", None)
             )
+        elif tool_name == "send_input":
+            return await asyncio.to_thread(
+                self.send_input,
+                args.get("session_id", args.get("id", "")),
+                args.get("text", args.get("input", "")),
+            )
+        elif tool_name == "kill_cmd":
+            return await asyncio.to_thread(
+                self.kill_cmd, args.get("session_id", args.get("id", ""))
+            )
         elif tool_name == "run_python":
             return await asyncio.to_thread(self.run_python, args.get("code", ""))
         elif tool_name == "run_background_cmd":
@@ -288,6 +310,33 @@ class AgentTools(SystemToolsMixin, FileSystemToolsMixin, BrowserToolsMixin, Docu
             return self.zip_pack(args.get("zip_path", ""), args.get("files", []))
         elif tool_name == "unzip_pack":
             return self.unzip_pack(args.get("zip_path", ""), args.get("extract_to", "."))
+        elif tool_name == "inspect_media":
+            return await asyncio.to_thread(
+                self.inspect_media,
+                args.get("path", ""),
+                args.get("detailed", True),
+            )
+        elif tool_name == "read_clipboard":
+            return await asyncio.to_thread(self.read_clipboard)
+        elif tool_name == "write_clipboard":
+            return await asyncio.to_thread(
+                self.write_clipboard,
+                args.get("content", args.get("text", "")),
+            )
+        elif tool_name == "get_clipboard_history":
+            return await self.get_clipboard_history(args.get("limit", 10))
+        elif tool_name == "get_clipboard_item":
+            return await self.get_clipboard_item(
+                index=args.get("index"), item_id=args.get("item_id", args.get("id"))
+            )
+        elif tool_name == "set_clipboard":
+            return await self.set_clipboard(args.get("content", args.get("text", "")))
+        elif tool_name == "delete_clipboard_item":
+            return await self.delete_clipboard_item(
+                index=args.get("index"), item_id=args.get("item_id", args.get("id"))
+            )
+        elif tool_name == "clear_clipboard_history":
+            return await asyncio.to_thread(self.clear_clipboard_history)
 
         else:
             return f"[Error: Unknown tool '{tool_name}']"
