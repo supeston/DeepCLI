@@ -114,13 +114,13 @@ export const BentoGrid: React.FC = () => {
                   ))}
                 </div>
 
-                <a
-                  href="#download"
+                <button
+                  onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
                   className="inline-flex items-center gap-2 text-sm font-medium text-[#536DFE] hover:text-[#3D5AFE] transition-colors"
                 >
                   <span>Learn more about {tabs.find((t) => t.id === activeTab)?.label}</span>
                   <ArrowRight className="w-4 h-4" />
-                </a>
+                </button>
               </div>
 
               {/* Visual Preview */}

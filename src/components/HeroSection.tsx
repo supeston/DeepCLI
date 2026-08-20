@@ -50,22 +50,22 @@ export const HeroSection: React.FC = () => {
           {/* Action CTAs */}
           <ScrollReveal direction="up" delay={400}>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
-              <a
-                href="#download"
+              <button
+                onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
                 className="w-full sm:w-auto google-btn-primary px-8 py-3.5 text-sm font-medium"
                 data-testid="hero-primary-cta"
               >
                 <Monitor className="w-4 h-4" />
                 <span>Download for Windows</span>
-              </a>
+              </button>
 
-              <a
-                href="#features"
+              <button
+                onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
                 className="w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium"
               >
                 <span>Explore platform</span>
                 <ArrowRight className="w-4 h-4 text-gray-500" />
-              </a>
+              </button>
             </div>
           </ScrollReveal>
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { App } from '../App';
 import { Navbar } from '../components/Navbar';
 import { HeroSection } from '../components/HeroSection';
@@ -19,7 +20,11 @@ describe('DeepX Landing Page Component Test Suite', () => {
   });
 
   it('renders Navbar with full_logo.png asset, correct alt attribute, and navigation links', () => {
-    render(<Navbar />);
+    render(
+      <MemoryRouter>
+        <Navbar />
+      </MemoryRouter>
+    );
     const logoImg = screen.getByAltText('DeepX Logo');
     expect(logoImg).toBeInTheDocument();
     expect(logoImg).toHaveAttribute('src', 'full_logo.png');
