@@ -64,9 +64,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
       data-testid="navbar-header"
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
-        <div className="flex items-center justify-between">
-          {/* Left: Brand Logo (comes down with the navbar) */}
-          <div className="flex items-center gap-2 lg:w-48 z-10 relative">
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Brand Logo */}
+          <div className="flex items-center gap-2 shrink-0 z-10 relative">
             <div className="relative group/logo">
               <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
                 <img
@@ -81,8 +81,8 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
             </div>
           </div>
 
-          {/* Middle Navigation (Desktop) - Staggered entrance */}
-          <nav className="hidden lg:flex items-center gap-1.5 text-sm font-medium text-gray-600">
+          {/* Middle Navigation (Desktop) - Staggered entrance, no wrapping, expands cleanly */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-sm font-medium text-gray-600 whitespace-nowrap">
             {/* Products Dropdown */}
             <div
               className={`relative transition-all duration-500 ease-out delay-[120ms] ${
@@ -91,7 +91,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
               onMouseEnter={() => handleMouseEnter('products')}
               onMouseLeave={handleMouseLeave}
             >
-              <button className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors">
+              <button className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors whitespace-nowrap shrink-0">
                 <NavHoverIcon icon={Package} />
                 <span>Products</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60 ml-1 group-hover:text-[#536DFE] transition-colors" />
@@ -109,7 +109,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
                     </div>
                     <button
                       onClick={() => handleScrollTo('terminal')}
-                      className="flex w-full text-left items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
+                      className="flex w-full text-left items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors whitespace-normal"
                     >
                       <Terminal className="w-4 h-4 text-[#536DFE] mt-1 shrink-0" />
                       <div>
@@ -130,7 +130,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
               onMouseEnter={() => handleMouseEnter('usecases')}
               onMouseLeave={handleMouseLeave}
             >
-              <button className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors">
+              <button className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors whitespace-nowrap shrink-0">
                 <NavHoverIcon icon={Sparkles} />
                 <span>Use Cases</span>
                 <ChevronDown className="w-3.5 h-3.5 opacity-60 ml-1 group-hover:text-[#536DFE] transition-colors" />
@@ -145,19 +145,19 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
                   <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-xl space-y-1">
                     <button
                       onClick={() => handleScrollTo('usecases')}
-                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors whitespace-normal"
                     >
                       Frontend Engineering
                     </button>
                     <button
                       onClick={() => handleScrollTo('usecases')}
-                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors whitespace-normal"
                     >
                       Full-Stack Systems
                     </button>
                     <button
                       onClick={() => handleScrollTo('usecases')}
-                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                      className="block w-full text-left p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors whitespace-normal"
                     >
                       Autonomous Code Review
                     </button>
@@ -168,7 +168,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <button
               onClick={() => handleScrollTo('pricing')}
-              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[260ms] ${
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[260ms] whitespace-nowrap shrink-0 ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
             >
@@ -178,7 +178,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <button
               onClick={() => handleScrollTo('comparison')}
-              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[330ms] ${
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[330ms] whitespace-nowrap shrink-0 ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
             >
@@ -188,7 +188,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <Link
               to="/logs"
-              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[400ms] ${
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[400ms] whitespace-nowrap shrink-0 ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
             >
@@ -200,7 +200,7 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
               href="https://github.com/supeston/DeepCLI"
               target="_blank"
               rel="noopener noreferrer"
-              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[470ms] ${
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[470ms] whitespace-nowrap shrink-0 ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
               data-testid="github-link"
@@ -212,23 +212,23 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
           </nav>
 
           {/* Right Action - Staggered button & mobile menu */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               onClick={() => handleScrollTo('download')}
-              className={`google-btn-primary !px-3 !py-1.5 sm:!px-6 sm:!py-2.5 text-xs sm:text-sm font-medium gap-1.5 sm:gap-2 transition-all duration-500 ease-out delay-[160ms] sm:delay-[540ms] ${
+              className={`google-btn-primary !px-3 !py-1.5 sm:!px-6 sm:!py-2.5 text-xs sm:text-sm font-medium gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 transition-all duration-500 ease-out delay-[160ms] sm:delay-[540ms] ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
               data-testid="cta-download-btn"
             >
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-              <span>
+              <span className="whitespace-nowrap">
                 Download<span className="hidden sm:inline"> DeepX</span>
               </span>
             </button>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`lg:hidden p-2 rounded-full text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 transition-all duration-500 ease-out delay-[280ms] ${
+              className={`lg:hidden p-2 rounded-full text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 shrink-0 transition-all duration-500 ease-out delay-[280ms] ${
                 isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
               }`}
               aria-label="Toggle navigation"
