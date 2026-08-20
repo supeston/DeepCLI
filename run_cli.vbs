@@ -9,9 +9,9 @@ quote = Chr(34)
 
 ' Если окружение .venv уже создано — запускаем DeepCLI, иначе запускаем автоматический установщик deepx\install.py
 If fso.FileExists(folder & "\.venv\Scripts\python.exe") Then
-    innerCmd = "set PYTHONDONTWRITEBYTECODE=1 & " & quote & folder & "\.venv\Scripts\python.exe" & quote & " " & quote & folder & "\deep_cli.py" & quote
+    innerCmd = "set PYTHONDONTWRITEBYTECODE=1 & " & quote & folder & "\.venv\Scripts\python.exe" & quote & " " & quote & folder & "\deepx\deep_cli.py" & quote
 Else
-    innerCmd = "set PYTHONDONTWRITEBYTECODE=1 & python " & quote & folder & "\deepx\install.py" & quote & " && " & quote & folder & "\.venv\Scripts\python.exe" & quote & " " & quote & folder & "\deep_cli.py" & quote
+    innerCmd = "set PYTHONDONTWRITEBYTECODE=1 & python " & quote & folder & "\deepx\install.py" & quote & " && " & quote & folder & "\.venv\Scripts\python.exe" & quote & " " & quote & folder & "\deepx\deep_cli.py" & quote
 End If
 
 For Each argument In WScript.Arguments

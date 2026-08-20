@@ -1,4 +1,4 @@
-﻿# 🚀 DEEPX (DeepCLI)
+# 🚀 DEEPX (DeepCLI)
 
 <div align="center">
 
@@ -80,17 +80,24 @@
 
 ```
 DeepCLI / DEEPX
-├── deep_cli.py               # Точка входа в приложение
-├── run_cli.vbs               # Скрипт быстрого запуска для Windows Terminal
+├── run_cli.vbs               # Скрипт запуска и автоустановки (Windows Terminal)
 ├── requirements.txt          # Зависимости проекта
 ├── .env.example              # Шаблон конфигурации API-ключей
+├── README.md                 # Документация проекта
+├── LICENSE                   # MIT Лицензия
 └── deepx/
+    ├── deep_cli.py           # Точка входа в приложение
+    ├── __main__.py           # Запуск через python -m deepx
+    ├── install.py            # Автоматический установщик зависимостей и браузера
     ├── main.py               # Запуск CLI и парсинг аргументов
     ├── core/                 # Конфигурация, системные промпты, константы
     ├── api/                  # Движок DeepAPI + Playwright Stealth
     ├── parser/               # Ленивый и отказоустойчивый парсер вызовов инструментов
     ├── agent/                # Исполнительный цикл агента, комплитер, промпты
     ├── tools/                # Инструменты агента
+    │   ├── terminal_session.py # Интерактивный ConPTY + Win32 Job Objects
+    │   ├── clipboard.py      # WinRT Clipboard History (Win + V)
+    │   ├── media_inspector.py# Инспектор медиа-файлов
     │   ├── system.py         # run_cmd, run_python, run_background_cmd, task_status/log
     │   ├── filesystem.py     # read_file, write_file, edit_file, list_dir, file_info
     │   ├── browser.py        # browser_action (Playwright)
@@ -156,7 +163,11 @@ cp .env.example .env
 
 ### 5. Запуск
 ```bash
-python deep_cli.py
+# Рекомендуемый запуск в 1 клик на Windows:
+# Просто запустите run_cli.vbs
+
+# Либо через терминал:
+python -m deepx
 ```
 
 > 💡 **Первый запуск:** При первом старте откроется окно браузера Chromium для авторизации в **chat.deepseek.com**. Войдите в свой аккаунт — сессия автоматически сохранится в локальный файл `state.json`, и все последующие запуски будут проходить мгновенно в тихом фоновом режиме.

@@ -115,7 +115,7 @@ class DeepCLIApp:
             "-d", APP_DIR,
             "cmd.exe", "/d", "/c",
             sys.executable,
-            os.path.join(APP_DIR, "deep_cli.py"),
+            os.path.join(APP_DIR, "deepx", "deep_cli.py"),
             "--state", self.state_file,
         ]
         if not self.headless:
