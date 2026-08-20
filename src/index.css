@@ -34,6 +34,20 @@ code, pre, .font-mono {
   background: #2e3857;
 }
 
+/* Antigravity floating animation */
+@keyframes antigravity-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translateY(-14px) rotate(2deg) scale(1.02);
+  }
+}
+
+.animate-antigravity-float {
+  animation: antigravity-float 6s ease-in-out infinite;
+}
+
 /* Google-style Button components */
 .google-btn-primary {
   background-color: #1a73e8;

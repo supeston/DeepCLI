@@ -33,6 +33,15 @@ export const DownloadSection: React.FC = () => {
           <div className="absolute -top-32 -left-32 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#C58AF9]/15 rounded-full blur-3xl pointer-events-none" />
 
+          {/* Large Floating Transparent DeepX Emblem in Background */}
+          <div className="absolute -right-12 -bottom-12 opacity-15 pointer-events-none select-none animate-antigravity-float">
+            <img
+              src="log.png"
+              alt="DeepX Watermark"
+              className="w-64 h-64 object-contain"
+            />
+          </div>
+
           <div className="relative z-10">
             <div className="text-center max-w-2xl mx-auto mb-12">
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-[#8AB4F8] border border-blue-500/30 mb-4">

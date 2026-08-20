@@ -29,10 +29,14 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     expect(githubLink).toHaveAttribute('href', 'https://github.com/supeston/DeepCLI');
   });
 
-  it('renders HeroSection with title and copy install button', () => {
+  it('renders HeroSection with large transparent log.png and copy install button', () => {
     render(<HeroSection />);
     expect(screen.getByText(/Experience liftoff with the/i)).toBeInTheDocument();
     expect(screen.getByText(/next-gen agent platform/i)).toBeInTheDocument();
+
+    const heroLogImg = screen.getByAltText('DeepX Transparent Logo');
+    expect(heroLogImg).toBeInTheDocument();
+    expect(heroLogImg).toHaveAttribute('src', 'log.png');
 
     const copyBtn = screen.getByTestId('hero-copy-cmd-btn');
     expect(copyBtn).toBeInTheDocument();
@@ -85,9 +89,12 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     expect(screen.getByText(/Clipboard History \(Win \+ V\)/i)).toBeInTheDocument();
   });
 
-  it('renders DownloadSection with installation steps and copy triggers', () => {
+  it('renders DownloadSection with transparent log.png watermark and copy triggers', () => {
     render(<DownloadSection />);
     expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
+    const watermark = screen.getByAltText('DeepX Watermark');
+    expect(watermark).toHaveAttribute('src', 'log.png');
+
     const copyBtn0 = screen.getByTestId('install-copy-btn-0');
     fireEvent.click(copyBtn0);
     expect(navigator.clipboard.writeText).toHaveBeenCalled();

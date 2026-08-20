@@ -12,9 +12,26 @@ export const HeroSection: React.FC = () => {
   };
 
   return (
-    <section className="relative pt-32 pb-16 md:pt-44 md:pb-24 overflow-hidden">
+    <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-4xl mx-auto">
+          {/* Prominent Large Floating Transparent Logo (Antigravity Orb) */}
+          <div className="relative inline-block mb-6">
+            {/* Ambient Radial Glow */}
+            <div className="absolute inset-0 w-44 h-44 sm:w-56 sm:h-56 -top-4 -left-4 sm:-top-6 sm:-left-6 bg-gradient-to-r from-[#1a73e8]/30 via-[#8AB4F8]/20 to-[#C58AF9]/25 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 animate-antigravity-float">
+              <img
+                src="log.png"
+                alt="DeepX Transparent Logo"
+                className="w-28 h-28 sm:w-36 sm:h-36 mx-auto object-contain drop-shadow-[0_15px_30px_rgba(26,115,232,0.45)] hover:scale-105 transition-transform duration-300"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'logo.png';
+                }}
+              />
+            </div>
+          </div>
+
           {/* Antigravity Pill Label */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-blue-500/10 border border-blue-500/20 text-[#8AB4F8] mb-8 shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#8AB4F8]" />
