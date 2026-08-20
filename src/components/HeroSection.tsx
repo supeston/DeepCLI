@@ -49,12 +49,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
   const typedSuffix = typedLength > PREFIX_TEXT.length ? FULL_TEXT.slice(PREFIX_TEXT.length, typedLength) : '';
 
   return (
-    <section className="relative min-h-[100dvh] md:min-h-screen flex flex-col justify-center items-center pt-20 pb-8 sm:pt-36 sm:pb-24 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full my-auto">
-        <div className="text-center max-w-4xl mx-auto">
+    <section className="relative min-h-[100dvh] md:min-h-screen flex flex-col justify-between items-center pt-24 pb-8 sm:pt-36 sm:pb-20 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full flex-1 flex flex-col justify-between items-center text-center">
+        {/* Top/Middle Group: Logo + Live Typing Title + Action Buttons */}
+        <div className="max-w-4xl mx-auto my-auto flex flex-col items-center w-full">
           {/* 1. Centered Brand Artwork */}
           <div
-            className={`flex items-center justify-center gap-3 mb-3 sm:mb-6 transition-all duration-600 ease-out delay-[600ms] ${
+            className={`flex items-center justify-center gap-3 mb-4 sm:mb-6 transition-all duration-600 ease-out delay-[600ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 -translate-y-6 pointer-events-none'
@@ -71,7 +72,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
           </div>
 
           {/* 2. Main Headline with Live Human Typing */}
-          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-6 sm:mb-10 leading-[1.12] min-h-[1.2em]">
+          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-8 sm:mb-12 leading-[1.12] min-h-[1.2em]">
             <span>{typedPrefix}</span>
             {typedSuffix && <span className="font-medium">{typedSuffix}</span>}
             {!typingDone && (
@@ -80,11 +81,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
           </h1>
 
           {/* 3. Action CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-10 sm:mb-14">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 w-full sm:w-auto">
             {/* Download for Windows */}
             <button
               onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
-              className={`w-full sm:w-auto google-btn-primary px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[750ms] ${
+              className={`w-full sm:w-auto google-btn-primary px-7 sm:px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[750ms] ${
                 typingDone
                   ? 'opacity-100 translate-y-0'
                   : 'opacity-0 translate-y-6 pointer-events-none'
@@ -98,7 +99,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             {/* Explore platform */}
             <button
               onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
-              className={`w-full sm:w-auto google-btn-secondary px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[900ms] ${
+              className={`w-full sm:w-auto google-btn-secondary px-7 sm:px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[900ms] ${
                 typingDone
                   ? 'opacity-100 translate-y-0'
                   : 'opacity-0 translate-y-6 pointer-events-none'
@@ -108,73 +109,73 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
               <ArrowRight className="w-4 h-4 text-gray-500" />
             </button>
           </div>
+        </div>
 
-          {/* 4. 1-Click Code Box with Smooth Border Beam on Copy */}
+        {/* 4. 1-Click Code Box - Positioned lower down near the bottom third */}
+        <div
+          className={`w-full max-w-xl mx-auto mt-10 sm:mt-16 mb-2 transition-all duration-600 ease-out delay-[1050ms] ${
+            typingDone
+              ? 'opacity-100 translate-y-0'
+              : 'opacity-0 translate-y-6 pointer-events-none'
+          }`}
+        >
           <div
-            className={`max-w-xl mx-auto mb-2 sm:mb-4 transition-all duration-600 ease-out delay-[1050ms] ${
-              typingDone
-                ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-6 pointer-events-none'
+            className={`relative flex items-center justify-between p-3 sm:p-3.5 pl-4 sm:pl-5 rounded-2xl bg-white border border-gray-200 transition-all duration-300 ${
+              copied
+                ? 'border-[#536DFE]/60 shadow-xl shadow-[#536DFE]/20'
+                : 'shadow-lg shadow-gray-200/50'
             }`}
           >
-            <div
-              className={`relative flex items-center justify-between p-3 sm:p-3.5 pl-4 sm:pl-5 rounded-2xl bg-white border border-gray-200 transition-all duration-300 ${
-                copied
-                  ? 'border-[#536DFE]/60 shadow-xl shadow-[#536DFE]/20'
-                  : 'shadow-lg shadow-gray-200/50'
-              }`}
-            >
-              {/* Animated SVG Border Beam */}
-              {copied && (
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none rounded-2xl z-20"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <defs>
-                    <linearGradient id="copy-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#536DFE" stopOpacity="1" />
-                      <stop offset="60%" stopColor="#38BDF8" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#536DFE" stopOpacity="0.2" />
-                    </linearGradient>
-                  </defs>
-                  <rect
-                    x="1"
-                    y="1"
-                    width="calc(100% - 2px)"
-                    height="calc(100% - 2px)"
-                    rx="16"
-                    fill="none"
-                    stroke="url(#copy-beam-grad)"
-                    strokeWidth="2.5"
-                    pathLength="100"
-                    className="animate-copy-beam"
-                  />
-                </svg>
-              )}
-
-              <div className="flex items-center gap-2.5 sm:gap-3 overflow-hidden text-[11px] sm:text-xs font-mono text-gray-600">
-                <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
-                <span className="truncate">{installCmd}</span>
-              </div>
-              <button
-                onClick={handleCopy}
-                className="ml-2.5 sm:ml-3 p-1.5 sm:p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0 z-30"
-                aria-label="Copy install command"
-                data-testid="hero-copy-cmd-btn"
+            {/* Animated SVG Border Beam */}
+            {copied && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none rounded-2xl z-20"
+                xmlns="http://www.w3.org/2000/svg"
               >
-                {copied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-[#34A853]" />
-                    <span className="text-[#34A853]">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
+                <defs>
+                  <linearGradient id="copy-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#536DFE" stopOpacity="1" />
+                    <stop offset="60%" stopColor="#38BDF8" stopOpacity="1" />
+                    <stop offset="100%" stopColor="#536DFE" stopOpacity="0.2" />
+                  </linearGradient>
+                </defs>
+                <rect
+                  x="1"
+                  y="1"
+                  width="calc(100% - 2px)"
+                  height="calc(100% - 2px)"
+                  rx="16"
+                  fill="none"
+                  stroke="url(#copy-beam-grad)"
+                  strokeWidth="2.5"
+                  pathLength="100"
+                  className="animate-copy-beam"
+                />
+              </svg>
+            )}
+
+            <div className="flex items-center gap-2.5 sm:gap-3 overflow-hidden text-[11px] sm:text-xs font-mono text-gray-600">
+              <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
+              <span className="truncate">{installCmd}</span>
             </div>
+            <button
+              onClick={handleCopy}
+              className="ml-2.5 sm:ml-3 p-1.5 sm:p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0 z-30"
+              aria-label="Copy install command"
+              data-testid="hero-copy-cmd-btn"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-[#34A853]" />
+                  <span className="text-[#34A853]">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
