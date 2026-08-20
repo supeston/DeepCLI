@@ -5,12 +5,13 @@ import { Navbar } from '../components/Navbar';
 import { HeroSection } from '../components/HeroSection';
 import { TerminalSimulator } from '../components/TerminalSimulator';
 import { BentoGrid } from '../components/BentoGrid';
+import { UseCasesSection } from '../components/UseCasesSection';
 import { ComparisonTable } from '../components/ComparisonTable';
 import { DownloadSection } from '../components/DownloadSection';
 import { Footer } from '../components/Footer';
 import { AntiGravityCanvas } from '../components/AntiGravityCanvas';
 
-describe('DeepX Landing Page Component Test Suite', () => {
+describe('DeepX Antigravity Landing Page Component Test Suite', () => {
   it('renders entire App without crashing', () => {
     const { container } = render(<App />);
     expect(container).toBeInTheDocument();
@@ -30,8 +31,8 @@ describe('DeepX Landing Page Component Test Suite', () => {
 
   it('renders HeroSection with title and copy install button', () => {
     render(<HeroSection />);
-    expect(screen.getByText(/Next-Gen Autonomous/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Windows AI Agent/i)[0]).toBeInTheDocument();
+    expect(screen.getByText(/Experience liftoff with the/i)).toBeInTheDocument();
+    expect(screen.getByText(/next-gen agent platform/i)).toBeInTheDocument();
 
     const copyBtn = screen.getByTestId('hero-copy-cmd-btn');
     expect(copyBtn).toBeInTheDocument();
@@ -60,14 +61,21 @@ describe('DeepX Landing Page Component Test Suite', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
 
-  it('renders BentoGrid with all 6 architectural pillars', () => {
+  it('renders BentoGrid Feature Explorer and allows tab selection', () => {
     render(<BentoGrid />);
-    expect(screen.getByText(/ConPTY & Windows Job Objects/i)).toBeInTheDocument();
-    expect(screen.getByText(/WinRT Clipboard History/i)).toBeInTheDocument();
-    expect(screen.getByText(/Dual-Engine DeepSeek & Stealth/i)).toBeInTheDocument();
-    expect(screen.getByText(/Deep Media Inspector/i)).toBeInTheDocument();
-    expect(screen.getByText(/Verification Barriers/i)).toBeInTheDocument();
-    expect(screen.getByText(/1-Click Windows Launcher/i)).toBeInTheDocument();
+    expect(screen.getByText(/Built for developers for the/i)).toBeInTheDocument();
+    expect(screen.getByTestId('feature-tab-cli')).toBeInTheDocument();
+
+    // Switch to SDK tab
+    const sdkTab = screen.getByTestId('feature-tab-sdk');
+    fireEvent.click(sdkTab);
+    expect(screen.getAllByText(/Python Agent Harness/i)[0]).toBeInTheDocument();
+  });
+
+  it('renders UseCasesSection with role cards and free tier pricing banner', () => {
+    render(<UseCasesSection />);
+    expect(screen.getByText(/Designed for every engineering workflow/i)).toBeInTheDocument();
+    expect(screen.getByText(/Open Source & Free for Developers/i)).toBeInTheDocument();
   });
 
   it('renders ComparisonTable technical benchmark rows', () => {
@@ -79,7 +87,7 @@ describe('DeepX Landing Page Component Test Suite', () => {
 
   it('renders DownloadSection with installation steps and copy triggers', () => {
     render(<DownloadSection />);
-    expect(screen.getByText(/Get DeepX Running in 60 Seconds/i)).toBeInTheDocument();
+    expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
     const copyBtn0 = screen.getByTestId('install-copy-btn-0');
     fireEvent.click(copyBtn0);
     expect(navigator.clipboard.writeText).toHaveBeenCalled();

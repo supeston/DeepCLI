@@ -1,205 +1,146 @@
-import React, { useRef, useState } from 'react';
-import {
-  Terminal,
-  Clipboard,
-  Film,
-  ShieldCheck,
-  Zap,
-  Cpu,
-  Layers,
-} from 'lucide-react';
-
-interface BentoCardProps {
-  title: string;
-  badge: string;
-  description: string;
-  icon: React.ReactNode;
-  tags: string[];
-  gradient: string;
-  className?: string;
-  children?: React.ReactNode;
-}
-
-const BentoCard: React.FC<BentoCardProps> = ({
-  title,
-  badge,
-  description,
-  icon,
-  tags,
-  gradient,
-  className = '',
-  children,
-}) => {
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [isHovered, setIsHovered] = useState(false);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    setMousePos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-  };
-
-  return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      data-testid={`bento-card-${badge.toLowerCase().replace(/\s+/g, '-')}`}
-      className={`relative rounded-3xl p-7 bg-[#0E111A]/90 border border-slate-800/80 hover:border-[#536DFE]/50 transition-all duration-300 overflow-hidden group shadow-xl backdrop-blur-xl ${className}`}
-    >
-      {/* Specular Mouse Glow Light */}
-      {isHovered && (
-        <div
-          className="pointer-events-none absolute -inset-px transition-opacity duration-300"
-          style={{
-            background: `radial-gradient(400px circle at ${mousePos.x}px ${mousePos.y}px, rgba(83, 109, 254, 0.18), transparent 80%)`,
-          }}
-        />
-      )}
-
-      {/* Ambient Corner Gradient */}
-      <div
-        className={`absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl ${gradient} opacity-10 rounded-full blur-3xl group-hover:opacity-20 transition-opacity duration-500`}
-      />
-
-      <div className="relative z-10 flex flex-col justify-between h-full">
-        <div>
-          {/* Header & Badge */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-2xl bg-[#171B28] border border-slate-700/60 text-[#38BDF8] group-hover:text-white group-hover:scale-110 transition-all duration-200">
-              {icon}
-            </div>
-            <span className="text-xs font-mono font-semibold px-2.5 py-1 rounded-full bg-[#536DFE]/15 text-[#38BDF8] border border-[#536DFE]/30">
-              {badge}
-            </span>
-          </div>
-
-          {/* Title & Description */}
-          <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#38BDF8] transition-colors duration-150">
-            {title}
-          </h3>
-          <p className="text-sm text-slate-300 leading-relaxed mb-6 font-normal">
-            {description}
-          </p>
-
-          {children}
-        </div>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-800/60 mt-auto">
-          {tags.map((tag, idx) => (
-            <span
-              key={idx}
-              className="text-[11px] font-mono px-2.5 py-0.5 rounded-lg bg-[#141824] text-slate-400 border border-slate-800"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
+import React, { useState } from 'react';
+import { Layers, Check } from 'lucide-react';
 
 export const BentoGrid: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<number>(0);
+
+  const features = [
+    {
+      id: 'cli',
+      title: 'DeepX CLI & ConPTY Runtime',
+      subtitle: 'Terminal-First Surface',
+      description:
+        'The lightweight, fast, terminal-first surface to work with DeepX Antigravity agents. Run autonomous coding agents, execute interactive shell commands directly with Windows ConPTY, and manage background subagents all from your keyboard.',
+      tags: ['pywinpty ConPTY', 'Win32 Job Objects', 'Prompt Detection', 'Zero Zombie Processes'],
+      codeSnippet: `# Interactive Windows ConPTY Session
+pty = PtyProcess.spawn(["cmd.exe", "/c", "npm run deploy"])
+pty.send_input("y\\n")  # Auto-evaluates interactive prompt`,
+    },
+    {
+      id: 'manager',
+      title: 'DeepX Agent Manager',
+      subtitle: 'Multi-Agent Command Center',
+      description:
+        'Your command center to manage multiple local agents in parallel. Group conversations into Projects, operate across multiple workspaces, and automate routine tasks with scheduled messages.',
+      tags: ['Parallel Subagents', 'Context Isolation', 'Cron Scheduler', 'Zero Memory Leaks'],
+      codeSnippet: `# Multi-agent Parallel Orchestration
+subagents = invoke_subagents([
+    {"name": "researcher", "role": "Codebase Auditor"},
+    {"name": "tester", "role": "Vitest Runner"}
+])`,
+    },
+    {
+      id: 'sdk',
+      title: 'DeepX SDK & Verification Barriers',
+      subtitle: 'Python Agent Harness',
+      description:
+        "Prototype custom agents leveraging DeepX's harness with minimal code. Python scripts to iterate on agentic applications, automate software engineering tasks, and enforce AST bytecode compilation before returning code.",
+      tags: ['Verification Barrier', 'py_compile Check', 'AST Validator', 'Self-Correction Loop'],
+      codeSnippet: `# Dual ReAct Verification Loop
+verify_syntax("service.py")
+# => Checked with py_compile & AST validator before user return`,
+    },
+    {
+      id: 'multimodal',
+      title: 'WinRT & Media Multimodal Engine',
+      subtitle: 'Native Windows Integration',
+      description:
+        'The fully-featured agentic runtime with native WinRT Clipboard History (Win+V), deep Media Inspector for containers, codecs, and 10-bit HDR video, and Playwright Stealth DOM streaming.',
+      tags: ['WinRT Win+V', 'PyMediaInfo / ffprobe', 'Playwright Stealth', 'Zero Censorship'],
+      codeSnippet: `# WinRT Clipboard History Integration
+items = await Clipboard.get_history_items_async()
+# => Extracts text, codes, and Bitmap PNG screenshots`,
+    },
+  ];
+
+  const current = features[activeTab];
+
   return (
     <section id="features" className="py-24 relative z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section Header (Google Antigravity style) */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-[#536DFE]/15 text-[#38BDF8] border border-[#536DFE]/30 mb-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-[#8AB4F8] border border-blue-500/20 mb-4">
             <Layers className="w-3.5 h-3.5" />
-            <span>CORE ARCHITECTURE</span>
+            <span>CORE SURFACES</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
-            Engineered for Deep Autonomy
+          <h2 className="text-3xl sm:text-5xl font-normal text-white tracking-tight mb-4">
+            Built for developers for the <span className="text-google-gradient font-medium">agent-first era</span>
           </h2>
-          <p className="text-slate-300 text-base sm:text-lg">
-            Every layer of DeepX is designed to bypass standard agent bottlenecks—from kernel-grade terminal controls to zero-telemetry browser engines.
+          <p className="text-[#9AA0A6] text-base sm:text-lg font-normal">
+            Whether you are running rapid terminal loops or orchestrating multi-agent systems, DeepX Antigravity gives you uncompromising Windows control.
           </p>
         </div>
 
-        {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Card 1: ConPTY + Job Objects */}
-          <BentoCard
-            title="ConPTY & Windows Job Objects"
-            badge="INTERACTIVE TERMINAL"
-            description="Replaces naive subprocess calls with a full Windows Pseudo-Console. Detects prompts, sends interactive keystrokes, and binds processes to Win32 Job Objects to eliminate process leaks."
-            icon={<Terminal className="w-6 h-6" />}
-            tags={['pywinpty', 'JOB_OBJECT_LIMIT_KILL', 'ANSI VT100', 'send_input']}
-            gradient="from-[#536DFE] to-[#38BDF8]"
-          >
-            <div className="p-3 rounded-xl bg-[#090B12] border border-slate-800 font-mono text-xs text-slate-400 mb-2">
-              <span className="text-[#38BDF8]">def</span> <span className="text-white">spawn_session</span>(): <br />
-              &nbsp;&nbsp;hJob = kernel32.<span className="text-[#A78BFA]">CreateJobObjectW</span>(...) <br />
-              &nbsp;&nbsp;pty = <span className="text-[#10B981]">PtyProcess.spawn</span>(argv)
+        {/* Interactive Feature Explorer (Google Antigravity Split Layout) */}
+        <div className="antigravity-card p-6 sm:p-10 border border-white/10 rounded-[32px] overflow-hidden">
+          {/* Tab Selector */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-8">
+            {features.map((item, idx) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(idx)}
+                data-testid={`feature-tab-${item.id}`}
+                className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-left flex flex-col gap-1 ${
+                  activeTab === idx
+                    ? 'bg-[#1a73e8] text-white shadow-lg shadow-blue-500/25'
+                    : 'text-[#9AA0A6] hover:text-white hover:bg-white/[0.04]'
+                }`}
+              >
+                <span className="font-semibold truncate">{item.title.split('&')[0]}</span>
+                <span className={`text-[11px] opacity-75 truncate ${activeTab === idx ? 'text-white' : 'text-slate-500'}`}>
+                  {item.subtitle}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Active Content Showcase */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left Description Column */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.05] text-[#8AB4F8] border border-white/10">
+                <span>{current.subtitle}</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-medium text-white tracking-tight">
+                {current.title}
+              </h3>
+              <p className="text-base text-[#9AA0A6] leading-relaxed font-normal">
+                {current.description}
+              </p>
+
+              {/* Tags */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {current.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 text-xs font-mono px-3 py-1 rounded-lg bg-white/[0.04] text-slate-300 border border-white/[0.08]"
+                  >
+                    <Check className="w-3.5 h-3.5 text-[#34A853]" />
+                    <span>{tag}</span>
+                  </span>
+                ))}
+              </div>
             </div>
-          </BentoCard>
 
-          {/* Card 2: WinRT Clipboard History */}
-          <BentoCard
-            title="WinRT Clipboard History"
-            badge="WIN + V INTEGRATION"
-            description="Deep integration with Windows Runtime DataTransfer APIs. Reads multi-slot clipboard items, extracts raw bitmap screenshots directly to PNG, and manages history natively."
-            icon={<Clipboard className="w-6 h-6" />}
-            tags={['WinRT winsdk', 'DataReader Streams', 'Pillow PNG', 'Win+V Sync']}
-            gradient="from-[#A78BFA] to-[#38BDF8]"
-          >
-            <div className="p-3 rounded-xl bg-[#090B12] border border-slate-800 font-mono text-xs text-slate-400 mb-2">
-              <span className="text-[#38BDF8]">await</span> Clipboard.<span className="text-[#A78BFA]">get_history_items_async</span>() <br />
-              <span className="text-slate-500"># Extracts text, codes, URLs &amp; bitmaps</span>
+            {/* Right Interactive Code / Visual Card */}
+            <div className="lg:col-span-6">
+              <div className="rounded-2xl bg-[#090A0F]/95 border border-white/10 p-5 shadow-2xl overflow-hidden font-mono text-xs text-slate-200">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.08] text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#EA4335]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FBBC05]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#34A853]" />
+                    <span className="text-[11px] ml-2 text-slate-400 font-semibold">{current.id}.py</span>
+                  </div>
+                  <span className="text-[10px] text-[#8AB4F8]">DeepX Antigravity 2.6</span>
+                </div>
+                <pre className="text-slate-300 leading-relaxed overflow-x-auto whitespace-pre">
+                  {current.codeSnippet}
+                </pre>
+              </div>
             </div>
-          </BentoCard>
-
-          {/* Card 3: Dual-Engine DeepSeek */}
-          <BentoCard
-            title="Dual-Engine DeepSeek & Stealth"
-            badge="ZERO-CENSORSHIP"
-            description="Direct Playwright DOM streaming backend with Playwright Stealth 2.x anti-detection. Features Instant mode for quick loops and Expert DeepThink for complex architectural reasoning."
-            icon={<Zap className="w-6 h-6" />}
-            tags={['Playwright Stealth', 'Instant / Expert', 'DOM Streaming', 'Zero Censorship']}
-            gradient="from-[#38BDF8] to-[#10B981]"
-          >
-            <div className="p-3 rounded-xl bg-[#090B12] border border-slate-800 font-mono text-xs text-slate-400 mb-2">
-              <span className="text-[#10B981]">✓</span> Stealth Fingerprint Masked <br />
-              <span className="text-[#10B981]">✓</span> Token-by-Token Adaptive Stream
-            </div>
-          </BentoCard>
-
-          {/* Card 4: Media Inspector Subsystem */}
-          <BentoCard
-            title="Deep Media Inspector"
-            badge="MEDIA METADATA"
-            description="Autonomous technical inspection of video, audio, and photo assets. Extracts container formats, video codecs (H.265/AV1/ProRes), 10-bit HDR color spaces, framerates, and EXIF/GPS."
-            icon={<Film className="w-6 h-6" />}
-            tags={['PyMediaInfo', 'ffprobe JSON', '10-bit HDR', 'EXIF / IPTC']}
-            gradient="from-[#F59E0B] to-[#536DFE]"
-          />
-
-          {/* Card 5: Self-Correction Loop */}
-          <BentoCard
-            title="Verification Barriers"
-            badge="SELF-CORRECTION"
-            description="Dual ReAct loops enforce automatic AST and bytecode syntax verification (py_compile, node --check, JSON schema) before returning code to user, eliminating syntax errors."
-            icon={<ShieldCheck className="w-6 h-6" />}
-            tags={['Verification Barrier', 'py_compile Check', 'AST Validator', 'Loop Detection']}
-            gradient="from-[#10B981] to-[#38BDF8]"
-          />
-
-          {/* Card 6: 1-Click Zero-Dependency Launcher */}
-          <BentoCard
-            title="1-Click Windows Launcher"
-            badge="SEAMLESS SETUP"
-            description="Single run_cli.vbs launcher with automated deepx/install.py engine. Creates isolated .venv, downloads Playwright Chromium, and runs in Windows Terminal with zero manual steps."
-            icon={<Cpu className="w-6 h-6" />}
-            tags={['run_cli.vbs', 'Auto .venv', 'Windows Terminal', 'PYTHONDONTWRITEBYTECODE']}
-            gradient="from-[#6366F1] to-[#EC4899]"
-          />
+          </div>
         </div>
       </div>
     </section>
