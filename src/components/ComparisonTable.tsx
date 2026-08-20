@@ -7,60 +7,52 @@ export const ComparisonTable: React.FC = () => {
     {
       feature: 'Pricing & Token Billing',
       deepx: '100% Free (Zero Bills)',
-      antigravity: 'Paid / Cloud Tier',
-      claudeCode: 'Paid API ($3-$15/M)',
-      grokBuild: 'Paid (X Premium+)',
-      codex: 'Paid API ($2.5-$10/M)',
+      antigravity: 'Free tier / $100/mo Ultra',
+      claudeCode: 'Paid API ($2–$10/M) & Pro ($20/mo)',
+      grokBuild: 'SuperGrok ($30/mo) / $2–$6/M API',
+      codex: 'Plus ($20/mo) & API (~$1.75–$14/M)',
       isHighlight: true,
     },
     {
       feature: 'Terminal Execution Engine',
       deepx: 'Native Windows ConPTY',
-      antigravity: 'Cloud Linux Sandbox',
-      claudeCode: 'Unix / POSIX PTY',
-      grokBuild: 'Cloud Container',
-      codex: 'Cloud Subprocess',
+      antigravity: 'Local VS Code Fork / Cloud Sandboxes',
+      claudeCode: 'Native Win/Mac/Linux (WSL2 optional)',
+      grokBuild: 'Native Rust TUI (Win/Mac/Linux)',
+      codex: 'Local Terminal Agent CLI',
     },
     {
       feature: 'WinRT Clipboard & Vision (Win+V / Win+Shift+S)',
       deepx: true,
-      antigravity: 'File Upload Only',
-      claudeCode: false,
-      grokBuild: 'Web Attachment',
-      codex: false,
-    },
-    {
-      feature: 'Local Background Process & Zombie Cleanup',
-      deepx: true,
-      antigravity: 'Cloud Container',
-      claudeCode: 'Basic Subshell',
-      grokBuild: 'Cloud Job Queue',
-      codex: 'Cloud Batch API',
+      antigravity: 'File & Image Paste',
+      claudeCode: 'Ctrl+V Image Paste',
+      grokBuild: 'Multimodal Image Input',
+      codex: 'File & Image Input',
     },
     {
       feature: 'Telemetry & Code Privacy',
       deepx: 'Zero Telemetry (100% Local)',
-      antigravity: 'Google Cloud Policy',
-      claudeCode: 'Anthropic API Policy',
-      grokBuild: 'xAI Data Retention',
-      codex: 'OpenAI API Policy',
+      antigravity: 'Google AI & Cloud Terms',
+      claudeCode: 'No training on API by default',
+      grokBuild: 'xAI Policy (training opt-out)',
+      codex: 'No training on API/Enterprise',
       isHighlight: true,
     },
     {
       feature: 'Supported Reasoning Engines',
-      deepx: 'DeepSeek-V4-Pro / R1',
-      antigravity: 'Gemini 2.0 Pro / Flash',
-      claudeCode: 'Claude 3.7 Sonnet',
-      grokBuild: 'Grok 3 Reasoning',
-      codex: 'GPT-4o / o3-mini',
+      deepx: 'DeepSeek-V4-Pro / Flash',
+      antigravity: 'Gemini 3.5 Flash / 3.1 Pro + Multi-model',
+      claudeCode: 'Sonnet 5 / Opus 5 / Fable 5',
+      grokBuild: 'Grok 4.6 Reasoning & grok-build',
+      codex: 'GPT-5.3-Codex / 5.4 / 5.5',
     },
     {
-      feature: 'One-Click Zero-Dependency Scaffolding',
+      feature: 'One-Click Native Setup',
       deepx: true,
-      antigravity: 'Web / Cloud Setup',
-      claudeCode: 'Manual npm / brew',
-      grokBuild: 'Browser IDE',
-      codex: 'Manual pip / npm',
+      antigravity: 'Desktop App / Cloud CLI',
+      claudeCode: 'Native Installer (no Node.js)',
+      grokBuild: 'PowerShell / curl One-liner',
+      codex: 'PowerShell / curl / npm',
     },
   ];
 
@@ -103,7 +95,7 @@ export const ComparisonTable: React.FC = () => {
           </ScrollReveal>
           <ScrollReveal direction="up" delay={200}>
             <TextScrollReveal
-              text="An honest, objective comparison of execution environments, telemetry standards, pricing architectures, and native platform capabilities."
+              text="An honest, objective comparison of execution environments, telemetry standards, pricing architectures, and native platform capabilities as of August 2026."
               className="text-[#5F6368] font-normal text-base sm:text-lg"
               highlightWords={['execution', 'telemetry', 'pricing', 'native']}
             />
@@ -113,7 +105,7 @@ export const ComparisonTable: React.FC = () => {
         <ScrollReveal direction="up" delay={300}>
           <div className="deepx-card overflow-hidden bg-white shadow-xl border border-slate-200">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[760px]">
+              <table className="w-full text-left border-collapse min-w-[840px]">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75">
                     <th className="p-5 text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">

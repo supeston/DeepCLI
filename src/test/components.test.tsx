@@ -90,7 +90,7 @@ describe('DeepX Landing Page Component Test Suite', () => {
     expect(screen.getByText(/Antigravity/i)).toBeInTheDocument();
     expect(screen.getByText(/Claude Code/i)).toBeInTheDocument();
     expect(screen.getByText(/Grok Build/i)).toBeInTheDocument();
-    expect(screen.getByText(/Codex/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Codex/i)[0]).toBeInTheDocument();
     expect(screen.getByText(/Terminal Execution Engine/i)).toBeInTheDocument();
     expect(screen.getByText(/Telemetry & Code Privacy/i)).toBeInTheDocument();
   });
