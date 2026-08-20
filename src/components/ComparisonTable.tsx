@@ -41,10 +41,10 @@ export const ComparisonTable: React.FC = () => {
     {
       feature: 'Supported Reasoning Engines',
       deepx: 'DeepSeek-V4-Pro / Flash',
-      antigravity: 'Gemini 3.5 Flash / 3.1 Pro + Multi-model',
+      antigravity: 'Gemini 3.7 Flash / 3.6 Flash',
       claudeCode: 'Sonnet 5 / Opus 5 / Fable 5',
       grokBuild: 'Grok 4.6 Reasoning & grok-build',
-      codex: 'GPT-5.3-Codex / 5.4 / 5.5',
+      codex: 'GPT-5.6 Sol / Terra / Luna',
     },
     {
       feature: 'One-Click Native Setup',
