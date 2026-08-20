@@ -49,7 +49,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
   const typedSuffix = typedLength > PREFIX_TEXT.length ? FULL_TEXT.slice(PREFIX_TEXT.length, typedLength) : '';
 
   return (
-    <section className="relative min-h-[100dvh] md:min-h-screen flex flex-col justify-center items-center pt-20 pb-12 sm:pt-36 sm:pb-24 overflow-hidden">
+    <section className="relative min-h-[100dvh] md:min-h-screen flex flex-col justify-center items-center pt-20 pb-8 sm:pt-36 sm:pb-24 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full my-auto">
         <div className="text-center max-w-4xl mx-auto">
           {/* 1. Centered Brand Artwork */}
@@ -80,7 +80,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
           </h1>
 
           {/* 3. Action CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-12">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-10 sm:mb-14">
             {/* Download for Windows */}
             <button
               onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
