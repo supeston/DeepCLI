@@ -198,14 +198,16 @@ export const Navbar: React.FC = () => {
           </nav>
 
           {/* Right Action */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => handleScrollTo('download')}
-              className="google-btn-primary text-xs sm:text-sm font-medium"
+              className="google-btn-primary !px-3 !py-1.5 sm:!px-6 sm:!py-2.5 text-xs sm:text-sm font-medium gap-1.5 sm:gap-2"
               data-testid="cta-download-btn"
             >
-              <Download className="w-4 h-4" />
-              <span>Download DeepX</span>
+              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span>
+                Download<span className="hidden sm:inline"> DeepX</span>
+              </span>
             </button>
 
             <button
