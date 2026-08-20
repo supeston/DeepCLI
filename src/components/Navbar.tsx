@@ -58,14 +58,14 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 transition-all duration-700 ease-out ${
+      className={`fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 transition-all duration-500 ease-out ${
         isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
       }`}
       data-testid="navbar-header"
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between">
-          {/* Left: Brand Logo */}
+          {/* Left: Brand Logo (comes down with the navbar) */}
           <div className="flex items-center gap-2 lg:w-48 z-10 relative">
             <div className="relative group/logo">
               <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
@@ -81,11 +81,13 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
             </div>
           </div>
 
-          {/* Middle Navigation (Desktop) */}
+          {/* Middle Navigation (Desktop) - Staggered entrance */}
           <nav className="hidden lg:flex items-center gap-1.5 text-sm font-medium text-gray-600">
             {/* Products Dropdown */}
             <div
-              className="relative"
+              className={`relative transition-all duration-500 ease-out delay-[120ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
               onMouseEnter={() => handleMouseEnter('products')}
               onMouseLeave={handleMouseLeave}
             >
@@ -122,7 +124,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             {/* Use Cases Dropdown */}
             <div
-              className="relative"
+              className={`relative transition-all duration-500 ease-out delay-[190ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
               onMouseEnter={() => handleMouseEnter('usecases')}
               onMouseLeave={handleMouseLeave}
             >
@@ -164,7 +168,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <button
               onClick={() => handleScrollTo('pricing')}
-              className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[260ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
             >
               <NavHoverIcon icon={Tag} />
               <span>Pricing</span>
@@ -172,7 +178,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <button
               onClick={() => handleScrollTo('comparison')}
-              className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[330ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
             >
               <NavHoverIcon icon={BarChart3} />
               <span>Benchmarks</span>
@@ -180,7 +188,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <Link
               to="/logs"
-              className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[400ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
             >
               <NavHoverIcon icon={History} />
               <span>Updates</span>
@@ -190,7 +200,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
               href="https://github.com/supeston/DeepCLI"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className={`group flex items-center px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-all duration-500 ease-out delay-[470ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
               data-testid="github-link"
             >
               <NavHoverIcon icon={Github} />
@@ -199,11 +211,13 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
             </a>
           </nav>
 
-          {/* Right Action */}
+          {/* Right Action - Staggered button & mobile menu */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => handleScrollTo('download')}
-              className="google-btn-primary !px-3 !py-1.5 sm:!px-6 sm:!py-2.5 text-xs sm:text-sm font-medium gap-1.5 sm:gap-2"
+              className={`google-btn-primary !px-3 !py-1.5 sm:!px-6 sm:!py-2.5 text-xs sm:text-sm font-medium gap-1.5 sm:gap-2 transition-all duration-500 ease-out delay-[160ms] sm:delay-[540ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
               data-testid="cta-download-btn"
             >
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
@@ -214,7 +228,9 @@ export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) 
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-full text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200"
+              className={`lg:hidden p-2 rounded-full text-gray-500 hover:text-gray-900 bg-gray-100 border border-gray-200 transition-all duration-500 ease-out delay-[280ms] ${
+                isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'
+              }`}
               aria-label="Toggle navigation"
               data-testid="mobile-menu-toggle"
             >

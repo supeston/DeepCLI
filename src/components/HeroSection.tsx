@@ -52,12 +52,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
     <section className="relative pt-32 pb-16 md:pt-44 md:pb-24 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-4xl mx-auto">
-          {/* Centered Brand Artwork - Appears with smooth slide/fade down once typing completes */}
+          {/* 1. Centered Brand Artwork - Slides down gracefully right after navbar items finish */}
           <div
-            className={`flex items-center justify-center gap-3 mb-6 transition-all duration-700 ease-out ${
+            className={`flex items-center justify-center gap-3 mb-6 transition-all duration-600 ease-out delay-[600ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
-                : 'opacity-0 -translate-y-4 pointer-events-none'
+                : 'opacity-0 -translate-y-6 pointer-events-none'
             }`}
           >
             <img
@@ -70,7 +70,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             />
           </div>
 
-          {/* Main Headline with Live Human Typing */}
+          {/* 2. Main Headline with Live Human Typing */}
           <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-10 leading-[1.08] min-h-[1.2em]">
             <span>{typedPrefix}</span>
             {typedSuffix && <span className="font-medium">{typedSuffix}</span>}
@@ -79,59 +79,67 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             )}
           </h1>
 
-          {/* Action CTAs & 1-Click Code Box - Smoothly fade in and slide up */}
+          {/* 3. Action CTAs - Staggered sequential flight */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+            {/* Download for Windows */}
+            <button
+              onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
+              className={`w-full sm:w-auto google-btn-primary px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[750ms] ${
+                typingDone
+                  ? 'opacity-100 translate-y-0'
+                  : 'opacity-0 translate-y-6 pointer-events-none'
+              }`}
+              data-testid="hero-primary-cta"
+            >
+              <Monitor className="w-4 h-4" />
+              <span>Download for Windows</span>
+            </button>
+
+            {/* Explore platform */}
+            <button
+              onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
+              className={`w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[900ms] ${
+                typingDone
+                  ? 'opacity-100 translate-y-0'
+                  : 'opacity-0 translate-y-6 pointer-events-none'
+              }`}
+            >
+              <span>Explore platform</span>
+              <ArrowRight className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+
+          {/* 4. 1-Click Code Box */}
           <div
-            className={`transition-all duration-700 delay-100 ease-out ${
+            className={`max-w-xl mx-auto mb-8 transition-all duration-600 ease-out delay-[1050ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-8 pointer-events-none'
+                : 'opacity-0 translate-y-6 pointer-events-none'
             }`}
           >
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
-              <button
-                onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
-                className="w-full sm:w-auto google-btn-primary px-8 py-3.5 text-sm font-medium cursor-pointer"
-                data-testid="hero-primary-cta"
-              >
-                <Monitor className="w-4 h-4" />
-                <span>Download for Windows</span>
-              </button>
-
-              <button
-                onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
-                className="w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium cursor-pointer"
-              >
-                <span>Explore platform</span>
-                <ArrowRight className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
-            {/* 1-Click Code Box */}
-            <div className="max-w-xl mx-auto mb-8">
-              <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 shadow-lg shadow-gray-200/50">
-                <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
-                  <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
-                  <span className="truncate">{installCmd}</span>
-                </div>
-                <button
-                  onClick={handleCopy}
-                  className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
-                  aria-label="Copy install command"
-                  data-testid="hero-copy-cmd-btn"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-[#34A853]" />
-                      <span className="text-[#34A853]">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </button>
+            <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 shadow-lg shadow-gray-200/50">
+              <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
+                <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
+                <span className="truncate">{installCmd}</span>
               </div>
+              <button
+                onClick={handleCopy}
+                className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+                aria-label="Copy install command"
+                data-testid="hero-copy-cmd-btn"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#34A853]" />
+                    <span className="text-[#34A853]">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
