@@ -1,143 +1,144 @@
 import React, { useState } from 'react';
-import { Layers, Check } from 'lucide-react';
+import { Terminal, Bot, Workflow, MousePointerClick, ArrowRight } from 'lucide-react';
+
+type FeatureTab = 'cli' | 'reasoning' | 'workflows' | 'clipboard';
 
 export const BentoGrid: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<FeatureTab>('cli');
 
-  const features = [
-    {
-      id: 'cli',
-      title: 'DeepX CLI & ConPTY Runtime',
-      subtitle: 'Terminal-First Surface',
-      description:
-        'The lightweight, fast, terminal-first surface to work with DeepX Antigravity agents. Run autonomous coding agents, execute interactive shell commands directly with Windows ConPTY, and manage background subagents all from your keyboard.',
-      tags: ['pywinpty ConPTY', 'Win32 Job Objects', 'Prompt Detection', 'Zero Zombie Processes'],
-      codeSnippet: `# Interactive Windows ConPTY Session
-pty = PtyProcess.spawn(["cmd.exe", "/c", "npm run deploy"])
-pty.send_input("y\\n")  # Auto-evaluates interactive prompt`,
-    },
-    {
-      id: 'manager',
-      title: 'DeepX Agent Manager',
-      subtitle: 'Multi-Agent Command Center',
-      description:
-        'Your command center to manage multiple local agents in parallel. Group conversations into Projects, operate across multiple workspaces, and automate routine tasks with scheduled messages.',
-      tags: ['Parallel Subagents', 'Context Isolation', 'Cron Scheduler', 'Zero Memory Leaks'],
-      codeSnippet: `# Multi-agent Parallel Orchestration
-subagents = invoke_subagents([
-    {"name": "researcher", "role": "Codebase Auditor"},
-    {"name": "tester", "role": "Vitest Runner"}
-])`,
-    },
-    {
-      id: 'sdk',
-      title: 'DeepX SDK & Verification Barriers',
-      subtitle: 'Python Agent Harness',
-      description:
-        "Prototype custom agents leveraging DeepX's harness with minimal code. Python scripts to iterate on agentic applications, automate software engineering tasks, and enforce AST bytecode compilation before returning code.",
-      tags: ['Verification Barrier', 'py_compile Check', 'AST Validator', 'Self-Correction Loop'],
-      codeSnippet: `# Dual ReAct Verification Loop
-verify_syntax("service.py")
-# => Checked with py_compile & AST validator before user return`,
-    },
-    {
-      id: 'multimodal',
-      title: 'WinRT & Media Multimodal Engine',
-      subtitle: 'Native Windows Integration',
-      description:
-        'The fully-featured agentic runtime with native WinRT Clipboard History (Win+V), deep Media Inspector for containers, codecs, and 10-bit HDR video, and Playwright Stealth DOM streaming.',
-      tags: ['WinRT Win+V', 'PyMediaInfo / ffprobe', 'Playwright Stealth', 'Zero Censorship'],
-      codeSnippet: `# WinRT Clipboard History Integration
-items = await Clipboard.get_history_items_async()
-# => Extracts text, codes, and Bitmap PNG screenshots`,
-    },
-  ];
+  const tabs = [
+    { id: 'cli', label: 'Command Line', icon: Terminal, color: 'text-[#1a73e8]' },
+    { id: 'reasoning', label: 'Dual-Engine', icon: Bot, color: 'text-[#1a73e8]' },
+    { id: 'workflows', label: 'Automation', icon: Workflow, color: 'text-[#1a73e8]' },
+    { id: 'clipboard', label: 'Clipboard', icon: MousePointerClick, color: 'text-[#1a73e8]' },
+  ] as const;
 
-  const current = features[activeTab];
+  const content: Record<FeatureTab, { title: string; desc: string; metrics: { label: string; val: string }[] }> = {
+    cli: {
+      title: 'Terminal-first Interactive Agent',
+      desc: 'Execute directly in your Windows console. DeepX utilizes ConPTY to run real build commands, tests, and scripts natively without emulators. It observes the output stream in real-time, handling errors before you even see them.',
+      metrics: [
+        { label: 'Latency', val: '< 10ms' },
+        { label: 'Integration', val: 'ConPTY' },
+      ],
+    },
+    reasoning: {
+      title: 'Zero-Telemetry Dual-Engine',
+      desc: 'Separates planning from execution. The primary engine orchestrates workflows and manages state, while a secondary ultra-fast inference engine handles syntax generation and validation. 100% local tracking with zero cloud telemetry.',
+      metrics: [
+        { label: 'Architecture', val: 'Agentic' },
+        { label: 'Telemetry', val: '0%' },
+      ],
+    },
+    workflows: {
+      title: 'End-to-End Task Automation',
+      desc: 'Delegate complex refactoring, bug hunting, or scaffolding. DeepX reads your workspace, formulates an execution plan, spawns necessary terminal processes, validates the result, and commits via Git automatically.',
+      metrics: [
+        { label: 'Context', val: 'Infinite' },
+        { label: 'Validation', val: 'Auto' },
+      ],
+    },
+    clipboard: {
+      title: 'WinRT Multimodal Context',
+      desc: 'Seamlessly pass images to the agent without saving files. Hit Win+Shift+S, take a snippet of a broken UI or a graphical bug, and DeepX reads it directly from your Windows Clipboard using the WinRT API.',
+      metrics: [
+        { label: 'API', val: 'WinRT' },
+        { label: 'Modality', val: 'Vision' },
+      ],
+    },
+  };
 
   return (
-    <section id="features" className="py-24 relative z-10">
+    <section id="features" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header (Google Antigravity style) */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-[#8AB4F8] border border-blue-500/20 mb-4">
-            <Layers className="w-3.5 h-3.5" />
-            <span>CORE SURFACES</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase bg-blue-50 text-[#1a73e8] border border-blue-100 mb-6">
+            Feature Explorer
           </div>
-          <h2 className="text-3xl sm:text-5xl font-normal text-white tracking-tight mb-4">
-            Built for developers for the <span className="text-google-gradient font-medium">agent-first era</span>
+          <h2 className="text-4xl sm:text-5xl font-normal tracking-tight text-gray-900 mb-6">
+            Built for developers for the <br className="hidden sm:block" />
+            <span className="text-blue-gradient font-medium">CLI era</span>
           </h2>
-          <p className="text-[#9AA0A6] text-base sm:text-lg font-normal">
-            Whether you are running rapid terminal loops or orchestrating multi-agent systems, DeepX Antigravity gives you uncompromising Windows control.
+          <p className="text-lg text-gray-600 font-normal">
+            DeepX is a unified Command Line tool. No complex SDKs or web dashboards required. Just one binary in your Windows terminal.
           </p>
         </div>
 
-        {/* Interactive Feature Explorer (Google Antigravity Split Layout) */}
-        <div className="antigravity-card p-6 sm:p-10 border border-white/10 rounded-[32px] overflow-hidden">
-          {/* Tab Selector */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-8">
-            {features.map((item, idx) => (
+        {/* Feature Tabs */}
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mb-12">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
               <button
-                key={item.id}
-                onClick={() => setActiveTab(idx)}
-                data-testid={`feature-tab-${item.id}`}
-                className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 text-left flex flex-col gap-1 ${
-                  activeTab === idx
-                    ? 'bg-[#1a73e8] text-white shadow-lg shadow-blue-500/25'
-                    : 'text-[#9AA0A6] hover:text-white hover:bg-white/[0.04]'
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                data-testid={`feature-tab-${tab.id}`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-medium transition-all duration-300 ${
+                  isActive
+                    ? 'bg-gray-900 text-white shadow-lg scale-105'
+                    : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
                 }`}
               >
-                <span className="font-semibold truncate">{item.title.split('&')[0]}</span>
-                <span className={`text-[11px] opacity-75 truncate ${activeTab === idx ? 'text-white' : 'text-slate-500'}`}>
-                  {item.subtitle}
-                </span>
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : tab.color}`} />
+                <span>{tab.label}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Active Content Showcase */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Left Description Column */}
-            <div className="lg:col-span-6 space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/[0.05] text-[#8AB4F8] border border-white/10">
-                <span>{current.subtitle}</span>
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-medium text-white tracking-tight">
-                {current.title}
+        {/* Active Feature Content */}
+        <div className="antigravity-card p-8 sm:p-12 animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-blue-50 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="grid lg:grid-cols-2 gap-12 items-center relative z-10">
+            <div>
+              <h3 className="text-3xl font-normal text-gray-900 mb-6">
+                {content[activeTab].title}
               </h3>
-              <p className="text-base text-[#9AA0A6] leading-relaxed font-normal">
-                {current.description}
+              <p className="text-gray-600 text-lg leading-relaxed mb-8">
+                {content[activeTab].desc}
               </p>
 
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 pt-2">
-                {current.tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1 text-xs font-mono px-3 py-1 rounded-lg bg-white/[0.04] text-slate-300 border border-white/[0.08]"
-                  >
-                    <Check className="w-3.5 h-3.5 text-[#34A853]" />
-                    <span>{tag}</span>
-                  </span>
+              <div className="grid grid-cols-2 gap-6 mb-8">
+                {content[activeTab].metrics.map((m, i) => (
+                  <div key={i} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                    <div className="text-2xl font-medium text-[#1a73e8] mb-1">{m.val}</div>
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">{m.label}</div>
+                  </div>
                 ))}
               </div>
+
+              <a
+                href="#download"
+                className="inline-flex items-center gap-2 text-sm font-medium text-[#1a73e8] hover:text-[#1557b0] transition-colors"
+              >
+                <span>Learn more about {tabs.find((t) => t.id === activeTab)?.label}</span>
+                <ArrowRight className="w-4 h-4" />
+              </a>
             </div>
 
-            {/* Right Interactive Code / Visual Card */}
-            <div className="lg:col-span-6">
-              <div className="rounded-2xl bg-[#090A0F]/95 border border-white/10 p-5 shadow-2xl overflow-hidden font-mono text-xs text-slate-200">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/[0.08] text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#EA4335]" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#FBBC05]" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#34A853]" />
-                    <span className="text-[11px] ml-2 text-slate-400 font-semibold">{current.id}.py</span>
+            {/* Visual Placeholder (Replaces complex graphics for clean CLI look) */}
+            <div className="bg-gray-50 rounded-3xl border border-gray-200 aspect-square flex items-center justify-center p-8 relative overflow-hidden shadow-inner">
+              <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-50" />
+              <div className="relative z-10 w-full max-w-sm">
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-4 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                      <Terminal className="w-5 h-5 text-[#1a73e8]" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">DeepX Windows</div>
+                      <div className="text-xs text-gray-500">Active Session</div>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-[#8AB4F8]">DeepX Antigravity 2.6</span>
+                  <div className="space-y-3">
+                    <div className="h-2 bg-gray-100 rounded-full w-3/4" />
+                    <div className="h-2 bg-gray-100 rounded-full w-1/2" />
+                    <div className="h-2 bg-gray-100 rounded-full w-5/6" />
+                  </div>
                 </div>
-                <pre className="text-slate-300 leading-relaxed overflow-x-auto whitespace-pre">
-                  {current.codeSnippet}
-                </pre>
               </div>
             </div>
           </div>

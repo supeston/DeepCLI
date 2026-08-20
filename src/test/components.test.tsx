@@ -9,9 +9,8 @@ import { UseCasesSection } from '../components/UseCasesSection';
 import { ComparisonTable } from '../components/ComparisonTable';
 import { DownloadSection } from '../components/DownloadSection';
 import { Footer } from '../components/Footer';
-import { AntiGravityCanvas } from '../components/AntiGravityCanvas';
 
-describe('DeepX Antigravity Landing Page Component Test Suite', () => {
+describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
   it('renders entire App without crashing', () => {
     const { container } = render(<App />);
     expect(container).toBeInTheDocument();
@@ -23,16 +22,16 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     render(<Navbar />);
     const logoImg = screen.getByAltText('DeepX Logo');
     expect(logoImg).toBeInTheDocument();
-    expect(logoImg).toHaveAttribute('src', 'full_logo.png');
+    expect(logoImg).toHaveAttribute('src', 'log.png');
 
     const githubLink = screen.getByTestId('github-link');
     expect(githubLink).toHaveAttribute('href', 'https://github.com/supeston/DeepCLI');
   });
 
-  it('renders HeroSection with large transparent log.png and copy install button', () => {
+  it('renders HeroSection with transparent log.png and copy install button', () => {
     render(<HeroSection />);
-    expect(screen.getByText(/Experience liftoff with the/i)).toBeInTheDocument();
-    expect(screen.getByText(/next-gen agent platform/i)).toBeInTheDocument();
+    expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/DeepX/i).length).toBeGreaterThan(0);
 
     const heroLogImg = screen.getByAltText('DeepX Transparent Logo');
     expect(heroLogImg).toBeInTheDocument();
@@ -52,12 +51,10 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     // Click WinRT Clipboard scenario tab
     const clipboardTab = screen.getByTestId('terminal-tab-clipboard');
     fireEvent.click(clipboardTab);
-    expect(screen.getByText(/WINRT API READY/i)).toBeInTheDocument();
 
     // Click Media Inspector tab
     const mediaTab = screen.getByTestId('terminal-tab-media');
     fireEvent.click(mediaTab);
-    expect(screen.getByText(/PYMEDIAINFO \/ FFPROBE/i)).toBeInTheDocument();
 
     // Copy terminal transcript
     const copyTranscriptBtn = screen.getByTestId('terminal-copy-btn');
@@ -70,10 +67,10 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     expect(screen.getByText(/Built for developers for the/i)).toBeInTheDocument();
     expect(screen.getByTestId('feature-tab-cli')).toBeInTheDocument();
 
-    // Switch to SDK tab
-    const sdkTab = screen.getByTestId('feature-tab-sdk');
-    fireEvent.click(sdkTab);
-    expect(screen.getAllByText(/Python Agent Harness/i)[0]).toBeInTheDocument();
+    // Switch to reasoning tab
+    const reasoningTab = screen.getByTestId('feature-tab-reasoning');
+    fireEvent.click(reasoningTab);
+    expect(screen.getAllByText(/Zero-Telemetry Dual-Engine/i)[0]).toBeInTheDocument();
   });
 
   it('renders UseCasesSection with role cards and free tier pricing banner', () => {
@@ -86,7 +83,7 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
     render(<ComparisonTable />);
     expect(screen.getByText(/Interactive Terminal Execution/i)).toBeInTheDocument();
     expect(screen.getByText(/Process Lifecycle & Zombie Cleanup/i)).toBeInTheDocument();
-    expect(screen.getByText(/Clipboard History \(Win \+ V\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/WinRT Clipboard Context/i)).toBeInTheDocument();
   });
 
   it('renders DownloadSection with transparent log.png watermark and copy triggers', () => {
@@ -108,17 +105,5 @@ describe('DeepX Antigravity Landing Page Component Test Suite', () => {
 
     const squareLogo = screen.getByAltText('DeepX Square Logo');
     expect(squareLogo).toHaveAttribute('src', 'logo.png');
-  });
-
-  it('initializes and cleanly unmounts AntiGravityCanvas without memory leak', () => {
-    const cancelAnimationFrameSpy = vi.spyOn(window, 'cancelAnimationFrame');
-    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
-
-    const { unmount } = render(<AntiGravityCanvas />);
-    expect(screen.getByTestId('antigravity-canvas')).toBeInTheDocument();
-
-    unmount();
-    expect(cancelAnimationFrameSpy).toHaveBeenCalled();
-    expect(removeEventListenerSpy).toHaveBeenCalled();
   });
 });

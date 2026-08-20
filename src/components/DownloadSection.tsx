@@ -26,32 +26,34 @@ export const DownloadSection: React.FC = () => {
   };
 
   return (
-    <section id="download" className="py-24 relative z-10">
+    <section id="download" className="py-24 relative z-10 bg-gray-50 border-y border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto rounded-[32px] bg-gradient-to-b from-[#121626] to-[#0A0D18] border border-white/10 p-8 sm:p-14 shadow-2xl relative overflow-hidden">
+        <div className="max-w-4xl mx-auto rounded-[32px] bg-white border border-gray-200 p-8 sm:p-14 shadow-xl relative overflow-hidden">
           {/* Ambient Glows */}
-          <div className="absolute -top-32 -left-32 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#C58AF9]/15 rounded-full blur-3xl pointer-events-none" />
-
+          <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#1a73e8]/5 rounded-full blur-3xl pointer-events-none" />
+          
           {/* Large Floating Transparent DeepX Emblem in Background */}
-          <div className="absolute -right-12 -bottom-12 opacity-15 pointer-events-none select-none animate-antigravity-float">
+          <div className="absolute -right-12 -bottom-12 opacity-[0.03] pointer-events-none select-none">
             <img
               src="log.png"
               alt="DeepX Watermark"
-              className="w-64 h-64 object-contain"
+              className="w-80 h-80 object-contain grayscale"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'logo.png';
+              }}
             />
           </div>
 
           <div className="relative z-10">
             <div className="text-center max-w-2xl mx-auto mb-12">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-[#8AB4F8] border border-blue-500/30 mb-4">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium bg-[#1a73e8]/10 text-[#1a73e8] border border-[#1a73e8]/20 mb-4">
                 <Download className="w-3.5 h-3.5" />
                 <span>INSTANT LIFTOFF</span>
               </div>
-              <h2 className="text-3xl sm:text-5xl font-normal text-white tracking-tight mb-4">
-                Experience liftoff with <span className="text-google-gradient font-medium">DeepX</span>
+              <h2 className="text-3xl sm:text-5xl font-normal text-gray-900 tracking-tight mb-4">
+                Experience liftoff with <span className="text-blue-gradient font-medium">DeepX</span>
               </h2>
-              <p className="text-[#9AA0A6] text-sm sm:text-base font-normal">
+              <p className="text-gray-600 text-sm sm:text-base font-normal">
                 Available for Windows 10 & 11 (64-bit). The automated installer initializes an isolated environment, browser stealth, and terminal tooling in seconds.
               </p>
             </div>
@@ -61,19 +63,19 @@ export const DownloadSection: React.FC = () => {
               {steps.map((step, idx) => (
                 <div
                   key={idx}
-                  className="rounded-2xl bg-[#080A10]/95 border border-white/[0.08] p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  className="rounded-2xl bg-gray-50 border border-gray-200 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1.5 flex-1">
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {step.title}
                     </div>
-                    <pre className="font-mono text-xs sm:text-sm text-slate-200 whitespace-pre-wrap select-all">
+                    <pre className="font-mono text-xs sm:text-sm text-gray-800 whitespace-pre-wrap select-all">
                       {step.code}
                     </pre>
                   </div>
                   <button
                     onClick={() => handleCopy(step.code, idx)}
-                    className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                    className="self-end sm:self-center px-3.5 py-2 rounded-xl bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 shadow-sm transition-colors flex items-center gap-1.5 text-xs font-medium"
                     data-testid={`install-copy-btn-${idx}`}
                   >
                     {copiedIndex === idx ? (
@@ -93,16 +95,16 @@ export const DownloadSection: React.FC = () => {
             </div>
 
             {/* System Badges */}
-            <div className="pt-8 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-[#9AA0A6]">
-              <div className="flex items-center gap-2">
+            <div className="pt-8 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-gray-500">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-[#34A853]" />
                 <span>Windows 10 / 11 (64-bit)</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-[#34A853]" />
                 <span>Python 3.10+ (Auto .venv)</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-[#34A853]" />
                 <span>100% Free Open Source (MIT)</span>
               </div>

@@ -12,46 +12,42 @@ export const HeroSection: React.FC = () => {
   };
 
   return (
-    <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden">
+    <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-4xl mx-auto">
-          {/* Prominent Large Floating Transparent Logo (Antigravity Orb) */}
-          <div className="relative inline-block mb-6">
-            {/* Ambient Radial Glow */}
-            <div className="absolute inset-0 w-44 h-44 sm:w-56 sm:h-56 -top-4 -left-4 sm:-top-6 sm:-left-6 bg-gradient-to-r from-[#1a73e8]/30 via-[#8AB4F8]/20 to-[#C58AF9]/25 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="relative z-10 animate-antigravity-float">
-              <img
-                src="log.png"
-                alt="DeepX Transparent Logo"
-                className="w-28 h-28 sm:w-36 sm:h-36 mx-auto object-contain drop-shadow-[0_15px_30px_rgba(26,115,232,0.45)] hover:scale-105 transition-transform duration-300"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'logo.png';
-                }}
-              />
-            </div>
+          {/* Logo Showcase */}
+          <div className="relative inline-block mb-8">
+            <div className="absolute inset-0 bg-[#1a73e8]/5 rounded-full blur-3xl pointer-events-none w-32 h-32" />
+            <img
+              src="log.png"
+              alt="DeepX Transparent Logo"
+              className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 mx-auto object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'logo.png';
+              }}
+            />
           </div>
 
-          {/* Antigravity Pill Label */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-blue-500/10 border border-blue-500/20 text-[#8AB4F8] mb-8 shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#8AB4F8]" />
-            <span>Google Antigravity Agent Harness 2.6</span>
+          {/* DeepX Pill Label */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-[#1a73e8]/10 border border-[#1a73e8]/20 text-[#1a73e8] mb-8 shadow-sm">
+            <Sparkles className="w-3.5 h-3.5 text-[#1a73e8]" />
+            <span>DeepX Agent Harness 2.6</span>
           </div>
 
-          {/* Main Headline (Google Antigravity style) */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-white mb-8 leading-[1.08]">
-            Experience liftoff with the{' '}
-            <span className="text-google-gradient font-medium">next-gen agent platform</span>
+          {/* Main Headline */}
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-gray-900 mb-8 leading-[1.08]">
+            Experience liftoff with{' '}
+            <span className="text-blue-gradient font-medium">DeepX</span>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-lg sm:text-xl text-[#9AA0A6] mb-10 max-w-3xl mx-auto leading-relaxed font-normal">
-            DeepX Antigravity is built for developer trust. Execute interactive workflows with native{' '}
-            <span className="text-white font-medium">Windows ConPTY</span>, capture rich context via{' '}
-            <span className="text-white font-medium">WinRT Clipboard History</span>, and harness zero-telemetry Dual-Engine reasoning.
+          <p className="text-lg sm:text-xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed font-normal">
+            DeepX is built for developer trust. Execute interactive workflows with native{' '}
+            <span className="text-gray-900 font-medium">Windows ConPTY</span>, capture rich context via{' '}
+            <span className="text-gray-900 font-medium">WinRT Clipboard History</span>, and harness zero-telemetry Dual-Engine reasoning.
           </p>
 
-          {/* Action CTAs (Google Antigravity style) */}
+          {/* Action CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a
               href="#download"
@@ -67,20 +63,20 @@ export const HeroSection: React.FC = () => {
               className="w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium"
             >
               <span>Explore Platform</span>
-              <ArrowRight className="w-4 h-4 text-slate-400" />
+              <ArrowRight className="w-4 h-4 text-[#1a73e8]" />
             </a>
           </div>
 
           {/* 1-Click Code Box */}
           <div className="max-w-xl mx-auto mb-16">
-            <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-[#111420]/90 border border-white/10 shadow-2xl backdrop-blur-xl">
-              <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-slate-300">
-                <span className="text-[#8AB4F8] select-none font-bold">PS&gt;</span>
+            <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 shadow-lg shadow-gray-200/50">
+              <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
+                <span className="text-[#1a73e8] select-none font-bold">PS&gt;</span>
                 <span className="truncate">{installCmd}</span>
               </div>
               <button
                 onClick={handleCopy}
-                className="ml-3 p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium"
+                className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium"
                 aria-label="Copy install command"
                 data-testid="hero-copy-cmd-btn"
               >

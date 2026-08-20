@@ -1,98 +1,47 @@
 import React from 'react';
-import { Github, ArrowUp } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   return (
-    <footer data-testid="site-footer" className="border-t border-white/[0.08] bg-[#07090E] relative z-10 pt-16 pb-12">
+    <footer className="bg-white border-t border-gray-200 py-12" data-testid="site-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Navigation Grid (Google Antigravity style) */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-          {/* Brand Info */}
-          <div className="col-span-2 md:col-span-1 space-y-4">
-            <div className="flex items-center gap-3">
-              <img
-                src="logo.png"
-                alt="DeepX Square Logo"
-                className="h-8 w-8 rounded-lg object-contain"
-              />
-              <span className="text-base font-medium text-white tracking-tight">Antigravity DeepX</span>
-            </div>
-            <p className="text-xs text-[#9AA0A6] leading-relaxed font-normal">
-              Autonomous engineering platform for Windows. Built for developer trust and deep terminal control.
-            </p>
-          </div>
-
-          {/* Product Column */}
-          <div className="space-y-3 text-xs">
-            <div className="font-semibold text-white uppercase tracking-wider text-[11px]">Product</div>
-            <ul className="space-y-2 text-[#9AA0A6]">
-              <li><a href="#features" className="hover:text-white transition-colors">DeepX CLI</a></li>
-              <li><a href="#features" className="hover:text-white transition-colors">DeepX Manager</a></li>
-              <li><a href="#features" className="hover:text-white transition-colors">DeepX SDK</a></li>
-              <li><a href="#comparison" className="hover:text-white transition-colors">Benchmarks</a></li>
-            </ul>
-          </div>
-
-          {/* Resources Column */}
-          <div className="space-y-3 text-xs">
-            <div className="font-semibold text-white uppercase tracking-wider text-[11px]">Resources</div>
-            <ul className="space-y-2 text-[#9AA0A6]">
-              <li><a href="https://github.com/supeston/DeepCLI" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Documentation</a></li>
-              <li><a href="https://github.com/supeston/DeepCLI" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">GitHub Repository</a></li>
-              <li><a href="https://github.com/supeston/DeepCLI/releases" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Releases</a></li>
-              <li><a href="#download" className="hover:text-white transition-colors">Quick Install</a></li>
-            </ul>
-          </div>
-
-          {/* Creator Column */}
-          <div className="space-y-3 text-xs">
-            <div className="font-semibold text-white uppercase tracking-wider text-[11px]">Creator</div>
-            <div className="text-[#9AA0A6] space-y-2">
-              <div>
-                Created by{' '}
-                <a
-                  href="https://github.com/supeston"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-white hover:text-[#8AB4F8] underline decoration-blue-500/40 underline-offset-4 transition-colors"
-                  data-testid="footer-author-link"
-                >
-                  supeston
-                </a>
-              </div>
-              <div className="text-[11px] text-slate-500">MIT Licensed Open Source</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Bar */}
-        <div className="pt-8 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#9AA0A6]">
-          <div>
-            © 2026 DeepX Antigravity. Built with Google Antigravity Design System.
-          </div>
-
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
+            <img
+              src="logo.png"
+              alt="DeepX Square Logo"
+              className="w-8 h-8 rounded-lg shadow-sm"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'log.png';
+              }}
+            />
+            <span className="text-xl font-medium tracking-tight text-gray-900">
+              DeepX
+            </span>
+          </div>
+
+          <div className="text-sm font-medium text-gray-500">
+            Created by{' '}
             <a
-              href="https://github.com/supeston/DeepCLI"
+              href="https://github.com/supeston"
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white border border-white/10 transition-colors"
-              aria-label="GitHub Repository"
+              className="text-[#1a73e8] hover:underline"
+              data-testid="footer-author-link"
             >
-              <Github className="w-4 h-4" />
+              supeston
             </a>
-            <button
-              onClick={scrollToTop}
-              className="p-2 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white border border-white/10 transition-colors"
-              aria-label="Scroll to top"
-              data-testid="footer-scroll-top"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
+          </div>
+
+          <div className="flex items-center gap-6 text-sm font-medium text-gray-500">
+            <a href="https://github.com/supeston/DeepCLI" className="hover:text-gray-900 transition-colors">
+              GitHub
+            </a>
+            <a href="https://github.com/supeston/DeepCLI/issues" className="hover:text-gray-900 transition-colors">
+              Issues
+            </a>
+            <a href="https://github.com/supeston/DeepCLI/blob/main/LICENSE" className="hover:text-gray-900 transition-colors">
+              License (MIT)
+            </a>
           </div>
         </div>
       </div>

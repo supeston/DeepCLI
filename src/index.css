@@ -5,13 +5,18 @@
 :root {
   --theme-primary: #1a73e8;
   --theme-primary-hover: #1557b0;
-  --theme-primary-glow: rgba(26, 115, 232, 0.35);
-  --theme-accent: #8AB4F8;
-  --theme-surface-dark: #090A0F;
-  --theme-surface-card: #111420;
+  --theme-primary-glow: rgba(26, 115, 232, 0.15);
+  --theme-accent: #1a73e8;
+  --theme-surface-light: #ffffff;
+  --theme-surface-card: #f8f9fa;
   --shape-corner-xl: 28px;
   --shape-corner-rounded: 999px;
   font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: var(--theme-surface-light);
+  color: #202124;
 }
 
 code, pre, .font-mono {
@@ -24,28 +29,14 @@ code, pre, .font-mono {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #090A0F;
+  background: #f1f3f4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e2438;
+  background: #dadce0;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2e3857;
-}
-
-/* Antigravity floating animation */
-@keyframes antigravity-float {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg) scale(1);
-  }
-  50% {
-    transform: translateY(-14px) rotate(2deg) scale(1.02);
-  }
-}
-
-.animate-antigravity-float {
-  animation: antigravity-float 6s ease-in-out infinite;
+  background: #bdc1c6;
 }
 
 /* Google-style Button components */
@@ -60,23 +51,22 @@ code, pre, .font-mono {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.3);
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
 }
 
 .google-btn-primary:hover {
-  background-color: #1765cc;
-  box-shadow: 0 6px 20px rgba(26, 115, 232, 0.45);
+  background-color: #1b66c9;
+  box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
   transform: translateY(-1px);
 }
 
 .google-btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  color: #E8EAED;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #ffffff;
+  color: #1a73e8;
+  border: 1px solid #dadce0;
   border-radius: 999px;
   padding: 10px 24px;
   font-weight: 500;
-  backdrop-filter: blur(12px);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
@@ -85,35 +75,33 @@ code, pre, .font-mono {
 }
 
 .google-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  background: #f8faff;
+  border-color: #d2e3fc;
   transform: translateY(-1px);
 }
 
 /* Google-style Card Surfaces */
 .antigravity-card {
-  background: rgba(17, 20, 32, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 28px;
-  backdrop-filter: blur(16px);
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .antigravity-card:hover {
-  border-color: rgba(138, 180, 248, 0.3);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(26, 115, 232, 0.12);
+  border-color: #1a73e8;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
 }
 
 /* Text Gradients */
 .text-google-gradient {
-  background: linear-gradient(135deg, #FFFFFF 20%, #8AB4F8 70%, #C58AF9 100%);
+  background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .text-blue-gradient {
-  background: linear-gradient(135deg, #8AB4F8 0%, #1a73e8 100%);
+  background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

@@ -1,5 +1,4 @@
 import { Navbar } from './components/Navbar';
-import { AntiGravityCanvas } from './components/AntiGravityCanvas';
 import { HeroSection } from './components/HeroSection';
 import { TerminalSimulator } from './components/TerminalSimulator';
 import { BentoGrid } from './components/BentoGrid';
@@ -10,10 +9,7 @@ import { Footer } from './components/Footer';
 
 export function App() {
   return (
-    <div className="relative min-h-screen bg-[#090A0F] text-[#E8EAED] selection:bg-[#1a73e8]/30 selection:text-[#8AB4F8]">
-      {/* Background Interactive Antigravity Particle Field */}
-      <AntiGravityCanvas />
-
+    <div className="relative min-h-screen bg-white text-[#202124] selection:bg-[#1a73e8]/20 selection:text-[#1a73e8]">
       {/* Google Antigravity Navigation */}
       <Navbar />
 
