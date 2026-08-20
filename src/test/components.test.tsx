@@ -7,6 +7,7 @@ import { HeroSection } from '../components/HeroSection';
 import { TerminalSimulator } from '../components/TerminalSimulator';
 import { BentoGrid } from '../components/BentoGrid';
 import { UseCasesSection } from '../components/UseCasesSection';
+import { PricingSection } from '../components/PricingSection';
 import { ComparisonTable } from '../components/ComparisonTable';
 import { DownloadSection } from '../components/DownloadSection';
 import { Footer } from '../components/Footer';
@@ -73,6 +74,13 @@ describe('DeepX Landing Page Component Test Suite', () => {
     render(<UseCasesSection />);
     expect(screen.getByText(/Designed for every engineering workflow/i)).toBeInTheDocument();
     expect(screen.getByText(/Open Source & Free for Developers/i)).toBeInTheDocument();
+  });
+
+  it('renders PricingSection explaining zero bills and free DeepSeek wrapper', () => {
+    render(<PricingSection />);
+    expect(screen.getByText(/Zero Token Bills/i)).toBeInTheDocument();
+    expect(screen.getByText(/Flagship AI For Everyone/i)).toBeInTheDocument();
+    expect(screen.getByText(/Community Edition/i)).toBeInTheDocument();
   });
 
   it('renders ComparisonTable technical benchmark rows', () => {
