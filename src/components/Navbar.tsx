@@ -21,7 +21,7 @@ const NavHoverIcon: React.FC<{ icon: React.ElementType }> = ({ icon: Icon }) => 
   </span>
 );
 
-export const Navbar: React.FC = () => {
+export const Navbar: React.FC<{ isVisible?: boolean }> = ({ isVisible = true }) => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -58,7 +58,9 @@ export const Navbar: React.FC = () => {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200"
+      className={`fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 transition-all duration-700 ease-out ${
+        isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
+      }`}
       data-testid="navbar-header"
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3.5">

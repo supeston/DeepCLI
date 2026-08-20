@@ -7,10 +7,14 @@ import { PricingSection } from '../components/PricingSection';
 import { ComparisonTable } from '../components/ComparisonTable';
 import { DownloadSection } from '../components/DownloadSection';
 
-export const HomePage: React.FC = () => {
+interface HomePageProps {
+  onIntroComplete?: () => void;
+}
+
+export const HomePage: React.FC<HomePageProps> = ({ onIntroComplete }) => {
   return (
     <>
-      <HeroSection />
+      <HeroSection onTypingComplete={onIntroComplete} />
       <TerminalSimulator />
       <BentoGrid />
       <UseCasesSection />
