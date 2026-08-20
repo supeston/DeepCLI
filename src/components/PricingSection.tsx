@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Zap, Sparkles, Shield, Cpu, ArrowRight } from 'lucide-react';
+import { Check, Zap, Shield, Cpu, ArrowRight } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
 
 export const PricingSection: React.FC = () => {
@@ -9,18 +9,12 @@ export const PricingSection: React.FC = () => {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <ScrollReveal direction="down">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#536DFE]/10 text-[#536DFE] text-xs font-semibold uppercase tracking-wider mb-4 border border-[#536DFE]/20">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>100% Free & Open Source</span>
-            </div>
             <h2 className="text-3xl sm:text-5xl font-normal text-[#1F1F1F] tracking-tight mb-6">
-              Zero Token Bills. <br />
-              <span className="font-medium text-[#536DFE]">Flagship AI For Everyone.</span>
+              Experience Flagship Intelligence. <br />
+              <span className="font-medium text-[#536DFE]">Completely Free. Zero API Costs.</span>
             </h2>
             <p className="text-lg text-[#5F6368] font-normal leading-relaxed">
-              DeepX работает через интеллектуальную обёртку над инфраструктурой DeepSeek. 
-              Она автоматически эмулирует клиентские сессии и выполняет бесплатные прямые запросы к флагманским моделям, 
-              полностью обходя платные лимиты и ограничения официального API.
+              DeepX is built with a native wrapper over DeepSeek infrastructure. It seamlessly emulates API sessions to provide unlimited, free direct access to flagship reasoning models—completely bypassing paid token limits, tier paywalls, and billing subscriptions.
             </p>
           </ScrollReveal>
         </div>
@@ -43,29 +37,29 @@ export const PricingSection: React.FC = () => {
                   </div>
                   <div className="flex items-baseline gap-2 mb-4">
                     <span className="text-5xl font-normal text-[#1F1F1F] tracking-tight">$0</span>
-                    <span className="text-slate-500 font-medium">/ навсегда без подписок</span>
+                    <span className="text-slate-500 font-medium">/ lifetime, no subscription required</span>
                   </div>
                   <p className="text-sm text-slate-600 mb-8 leading-relaxed">
-                    Никаких платных токенов, скрытых платежей, привязки карт или лимитов на количество запросов в сутки.
+                    Zero paywalls, zero token overages, and no credit card required. Everything runs locally with full flagship access out of the box.
                   </p>
 
                   <div className="space-y-4 mb-8">
                     {[
                       {
-                        title: 'Бесплатный доступ к флагманам DeepSeek',
-                        desc: 'Прямые запросы к DeepSeek-V3 и DeepSeek-R1 (DeepThink) на максимальной скорости.',
+                        title: 'Free Flagship Model Access',
+                        desc: 'Direct interaction with DeepSeek flagship models with high-speed token streaming.',
                       },
                       {
-                        title: 'Умная эмуляция сессий',
-                        desc: 'Обход платных ограничений API и лимитов на токены за счёт встроенного прокси-движка.',
+                        title: 'Session Emulation Engine',
+                        desc: 'Bypasses commercial API limits and paid quota restrictions via built-in proxy emulation.',
                       },
                       {
-                        title: 'Локальная безопасность & Zero-Telemetry',
-                        desc: 'Исходный код и контекст вашего проекта не отправляются на сторонние серверы аналитики.',
+                        title: 'Zero-Telemetry & Local Security',
+                        desc: 'Your codebase and conversational context never leave your machine or get sent to third-party trackers.',
                       },
                       {
-                        title: 'Полная интеграция с Windows',
-                        desc: 'Поддержка ConPTY терминала, фоновых процессов и работы с буфером обмена (Win+V).',
+                        title: 'Native Windows Integration',
+                        desc: 'Full ConPTY terminal support, background task management, and WinRT clipboard synchronization.',
                       },
                     ].map((feature, idx) => (
                       <div key={idx} className="flex items-start gap-3.5">
@@ -85,51 +79,64 @@ export const PricingSection: React.FC = () => {
                   onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
                   className="w-full google-btn-indigo py-3.5 text-sm font-semibold justify-center shadow-lg shadow-[#536DFE]/25 cursor-pointer"
                 >
-                  <span>Начать пользоваться бесплатно</span>
+                  <span>Download DeepX Free</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </ScrollReveal>
           </div>
 
-          {/* Technical Explanations & Comparison Cards */}
+          {/* Model Cards & Architecture Highlights */}
           <div className="lg:col-span-5 flex flex-col justify-between gap-6">
+            {/* DeepSeek-V4-Pro Card */}
             <ScrollReveal direction="up" delay={250}>
               <div className="deepx-card p-6 sm:p-8 bg-slate-50 border border-slate-200 hover:border-[#536DFE]/40 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-[#536DFE]/10 text-[#536DFE] flex items-center justify-center mb-4">
-                  <Cpu className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#536DFE]/10 text-[#536DFE] flex items-center justify-center">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                    <span className="font-semibold text-slate-900 text-sm">DeepSeek-V4-Pro</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-[#536DFE]/10 text-[#536DFE] px-2 py-0.5 rounded-full">
+                    1.6T / 49B
+                  </span>
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Как это работает под капотом?
-                </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  DeepX использует легковесный обратный шлюз к веб-эндпоинтам DeepSeek. Клиент эмулирует авторизованные сессии браузера, что позволяет отправлять неограниченное количество запросов в обход коммерческого API-биллинга.
+                  1.6T total / 49B active params. Performance rivaling the world's top closed-source models. Built for complex codebase reasoning, full refactors, and architectural planning.
                 </p>
               </div>
             </ScrollReveal>
 
+            {/* DeepSeek-V4-Flash Card */}
             <ScrollReveal direction="up" delay={350}>
               <div className="deepx-card p-6 sm:p-8 bg-slate-50 border border-slate-200 hover:border-[#536DFE]/40 transition-all">
-                <div className="w-10 h-10 rounded-xl bg-[#536DFE]/10 text-[#536DFE] flex items-center justify-center mb-4">
-                  <Shield className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#38BDF8]/10 text-[#38BDF8] flex items-center justify-center">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <span className="font-semibold text-slate-900 text-sm">DeepSeek-V4-Flash</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-[#38BDF8]/10 text-[#0284C7] px-2 py-0.5 rounded-full">
+                    284B / 13B
+                  </span>
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Никаких ключей и привязок карт
-                </h3>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  Вам не нужно регистрировать платёжные реквизиты или пополнять баланс в долларах. Скачиваете репозиторий, запускаете CLI — и сразу начинаете работу с топовым кодинг-ассистентом.
+                  284B total / 13B active params. Your fast, efficient, and economical choice. Rapid response streaming with exceptional accuracy for everyday scripts, debugging, and terminal automation.
                 </p>
               </div>
             </ScrollReveal>
 
+            {/* Zero Friction Card */}
             <ScrollReveal direction="up" delay={450}>
-              <div className="deepx-card p-6 sm:p-8 bg-slate-900 text-white border border-slate-800 shadow-xl">
+              <div className="deepx-card p-6 sm:p-8 bg-[#0F172A] text-white border border-slate-800 shadow-xl">
                 <div className="flex items-center gap-2 text-xs font-mono text-[#536DFE] font-bold uppercase tracking-wider mb-2">
-                  <Zap className="w-4 h-4" />
-                  <span>DeepSeek R1 + V3 Reasoning</span>
+                  <Shield className="w-4 h-4" />
+                  <span>No Keys, No Cards, Instant Liftoff</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Полноценное древо рассуждений (DeepThink), разбор архитектуры и генерация кода без цензуры и задержек.
+                  No billing setup or credit card input. Clone the repository, start the CLI, and immediately experience frontier AI capabilities.
                 </p>
               </div>
             </ScrollReveal>

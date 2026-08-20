@@ -78,8 +78,9 @@ describe('DeepX Landing Page Component Test Suite', () => {
 
   it('renders PricingSection explaining zero bills and free DeepSeek wrapper', () => {
     render(<PricingSection />);
-    expect(screen.getByText(/Zero Token Bills/i)).toBeInTheDocument();
-    expect(screen.getByText(/Flagship AI For Everyone/i)).toBeInTheDocument();
+    expect(screen.getByText(/Experience Flagship Intelligence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Completely Free. Zero API Costs/i)).toBeInTheDocument();
+    expect(screen.getByText(/DeepSeek-V4-Pro/i)).toBeInTheDocument();
     expect(screen.getByText(/Community Edition/i)).toBeInTheDocument();
   });
 
