@@ -14,10 +14,10 @@ export const ComparisonTable: React.FC = () => {
     <section id="comparison" className="py-24 bg-white">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-normal text-gray-900 tracking-tight mb-4">
+          <h2 className="text-3xl sm:text-4xl font-normal text-[#1F1F1F] tracking-tight mb-4">
             Technical Benchmarks
           </h2>
-          <p className="text-gray-600">
+          <p className="text-[#5F6368]">
             Why Windows developers choose DeepX over standard web-based AI tools.
           </p>
         </div>
@@ -26,30 +26,30 @@ export const ComparisonTable: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="p-6 text-sm font-medium text-gray-500 w-1/2">Capability</th>
-                  <th className="p-6 text-sm font-semibold text-gray-900 bg-blue-50/50 text-center w-1/4">DeepX CLI</th>
-                  <th className="p-6 text-sm font-medium text-gray-500 text-center w-1/4">Standard Agents</th>
+                <tr className="border-b border-slate-200">
+                  <th className="p-6 text-sm font-medium text-slate-500 w-1/2">Capability</th>
+                  <th className="p-6 text-sm font-semibold text-[#1F1F1F] bg-[#536DFE]/10 text-center w-1/4">DeepX CLI</th>
+                  <th className="p-6 text-sm font-medium text-slate-500 text-center w-1/4">Standard Agents</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="p-6 text-sm text-gray-700">{row.feature}</td>
-                    <td className="p-6 bg-blue-50/30 text-center">
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-6 text-sm text-slate-700">{row.feature}</td>
+                    <td className="p-6 bg-[#536DFE]/5 text-center">
                       {row.deepx ? (
-                        <Check className="w-5 h-5 text-[#1a73e8] mx-auto" />
+                        <Check className="w-5 h-5 text-[#536DFE] mx-auto" />
                       ) : (
-                        <Minus className="w-5 h-5 text-gray-300 mx-auto" />
+                        <Minus className="w-5 h-5 text-slate-300 mx-auto" />
                       )}
                     </td>
                     <td className="p-6 text-center">
                       {row.others === true ? (
-                        <Check className="w-5 h-5 text-gray-400 mx-auto" />
+                        <Check className="w-5 h-5 text-slate-400 mx-auto" />
                       ) : row.others === false ? (
-                        <Minus className="w-5 h-5 text-gray-300 mx-auto" />
+                        <Minus className="w-5 h-5 text-slate-300 mx-auto" />
                       ) : (
-                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                        <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
                           {row.others}
                         </span>
                       )}

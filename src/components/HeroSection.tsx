@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, ArrowRight, Copy, Check, Sparkles } from 'lucide-react';
+import { Monitor, ArrowRight, Copy, Check } from 'lucide-react';
 
 export const HeroSection: React.FC = () => {
   const [copied, setCopied] = useState(false);
@@ -12,36 +12,42 @@ export const HeroSection: React.FC = () => {
   };
 
   return (
-    <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden bg-white">
+    <section className="relative pt-32 pb-16 md:pt-44 md:pb-24 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-4xl mx-auto">
-          {/* DeepX Pill Label */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-[#1a73e8]/10 border border-[#1a73e8]/20 text-[#1a73e8] mb-8 shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#1a73e8]" />
-            <span>DeepX Agent Harness 2.6</span>
+          {/* Centered Brand Artwork (Matching Google Antigravity Center Title) */}
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <img
+              src="full_logo.png"
+              alt="DeepX"
+              className="h-10 sm:h-12 w-auto object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'logo.png';
+              }}
+            />
           </div>
 
-          {/* Main Headline */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-gray-900 mb-8 leading-[1.08]">
-            Experience liftoff with{' '}
-            <span className="text-blue-gradient font-medium">DeepX</span>
+          {/* Main Headline (Google Antigravity Clean Typography) */}
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-6 leading-[1.08]">
+            Experience liftoff with the{' '}
+            <span className="font-medium">next-gen agent platform</span>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-lg sm:text-xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed font-normal">
+          <p className="text-lg sm:text-xl text-[#5F6368] mb-10 max-w-3xl mx-auto leading-relaxed font-normal">
             DeepX is built for developer trust. Execute interactive workflows with native{' '}
-            <span className="text-gray-900 font-medium">Windows ConPTY</span>, capture rich context via{' '}
-            <span className="text-gray-900 font-medium">WinRT Clipboard History</span>, and harness zero-telemetry Dual-Engine reasoning.
+            <span className="text-[#1F1F1F] font-medium">Windows ConPTY</span>, capture rich context via{' '}
+            <span className="text-[#1F1F1F] font-medium">WinRT Clipboard History</span>, and harness zero-telemetry Dual-Engine reasoning.
           </p>
 
-          {/* Action CTAs */}
+          {/* Action CTAs (Google Antigravity Style: Black Primary + Light Secondary) */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a
               href="#download"
               className="w-full sm:w-auto google-btn-primary px-8 py-3.5 text-sm font-medium"
               data-testid="hero-primary-cta"
             >
-              <Download className="w-4 h-4" />
+              <Monitor className="w-4 h-4" />
               <span>Download for Windows</span>
             </a>
 
@@ -49,16 +55,16 @@ export const HeroSection: React.FC = () => {
               href="#features"
               className="w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium"
             >
-              <span>Explore Platform</span>
-              <ArrowRight className="w-4 h-4 text-[#1a73e8]" />
+              <span>Explore platform</span>
+              <ArrowRight className="w-4 h-4 text-gray-500" />
             </a>
           </div>
 
           {/* 1-Click Code Box */}
-          <div className="max-w-xl mx-auto mb-16">
+          <div className="max-w-xl mx-auto mb-8">
             <div className="flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 shadow-lg shadow-gray-200/50">
               <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
-                <span className="text-[#1a73e8] select-none font-bold">PS&gt;</span>
+                <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
                 <span className="truncate">{installCmd}</span>
               </div>
               <button

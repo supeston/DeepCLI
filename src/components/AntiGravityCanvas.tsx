@@ -5,10 +5,12 @@ interface Particle {
   y: number;
   vx: number;
   vy: number;
-  radius: number;
-  baseRadius: number;
+  size: number;
   color: string;
   alpha: number;
+  rotation: number;
+  rotationSpeed: number;
+  isDash: boolean;
 }
 
 export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className = '' }) => {
@@ -28,26 +30,28 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     const mouse = {
       x: -1000,
       y: -1000,
-      radius: 140,
+      radius: 160,
     };
 
-    // Palette inspired by cyber-indigo & cyan antigravity
-    const colors = ['#536DFE', '#38BDF8', '#818CF8', '#A78BFA', '#60A5FA'];
+    // Palette inspired by DeepX CLI (#536DFE, #38BDF8, #A78BFA, subtle coral & gold)
+    const colors = ['#536DFE', '#38BDF8', '#818CF8', '#A78BFA', '#F43F5E', '#F59E0B'];
 
-    const particleCount = Math.min(Math.floor((width * height) / 12000), 120);
+    const particleCount = Math.min(Math.floor((width * height) / 8000), 160);
     const particles: Particle[] = [];
 
     for (let i = 0; i < particleCount; i++) {
-      const radius = Math.random() * 2 + 1;
+      const isDash = Math.random() > 0.4;
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.6,
-        vy: (Math.random() - 0.5) * 0.6 - 0.15, // slight upward float (antigravity)
-        radius,
-        baseRadius: radius,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4 - 0.05,
+        size: isDash ? Math.random() * 3 + 2 : Math.random() * 2 + 1,
         color: colors[Math.floor(Math.random() * colors.length)],
-        alpha: Math.random() * 0.6 + 0.2,
+        alpha: Math.random() * 0.6 + 0.3,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.02,
+        isDash,
       });
     }
 
@@ -72,22 +76,9 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     document.addEventListener('mouseleave', handleMouseLeave);
 
     const render = () => {
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw background ambient gradient
-      const grad = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.3,
-        50,
-        width * 0.5,
-        height * 0.4,
-        width * 0.8
-      );
-      grad.addColorStop(0, 'rgba(83, 109, 254, 0.07)');
-      grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.03)');
-      grad.addColorStop(1, 'rgba(9, 10, 15, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
+      if (ctx.clearRect) {
+        ctx.clearRect(0, 0, width, height);
+      }
 
       // Update & Draw particles
       for (let i = 0; i < particles.length; i++) {
@@ -96,6 +87,7 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
         // Move
         p.x += p.vx;
         p.y += p.vy;
+        p.rotation += p.rotationSpeed;
 
         // Wrap edges
         if (p.x < 0) p.x = width;
@@ -103,7 +95,7 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
 
-        // Mouse Antigravity physics (repulsion & orbital swirl)
+        // Mouse Antigravity physics (repulsion)
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -111,40 +103,36 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
         if (dist < mouse.radius && dist > 0) {
           const force = (mouse.radius - dist) / mouse.radius;
           const angle = Math.atan2(dy, dx);
-          p.x -= Math.cos(angle) * force * 4;
-          p.y -= Math.sin(angle) * force * 4;
-          p.radius = p.baseRadius * (1 + force * 1.5);
-        } else {
-          p.radius = p.baseRadius;
+          p.x -= Math.cos(angle) * force * 5;
+          p.y -= Math.sin(angle) * force * 5;
         }
 
-        // Draw particle
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.alpha;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = p.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        // Draw particle (micro dots and dashes like Antigravity)
+        if (ctx.save && ctx.restore) {
+          ctx.save();
+          if (ctx.translate) ctx.translate(p.x, p.y);
+          if (ctx.rotate) ctx.rotate(p.rotation);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.alpha;
 
-        // Connect lines
-        for (let j = i + 1; j < particles.length; j++) {
-          const p2 = particles[j];
-          const dist2 = Math.hypot(p.x - p2.x, p.y - p2.y);
-          if (dist2 < 110) {
+          if (p.isDash && ctx.fillRect) {
+            ctx.fillRect(-p.size, -0.75, p.size * 2, 1.5);
+          } else if (ctx.beginPath && ctx.arc && ctx.fill) {
             ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = '#536DFE';
-            ctx.globalAlpha = (1 - dist2 / 110) * 0.18;
-            ctx.lineWidth = 0.75;
-            ctx.stroke();
+            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            ctx.fill();
           }
+
+          ctx.restore();
+        } else if (ctx.fillRect) {
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
         }
       }
 
-      ctx.globalAlpha = 1.0;
+      if (ctx.globalAlpha !== undefined) {
+        ctx.globalAlpha = 1.0;
+      }
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -162,7 +150,7 @@ export const AntiGravityCanvas: React.FC<{ className?: string }> = ({ className 
     <canvas
       ref={canvasRef}
       data-testid="antigravity-canvas"
-      className={`pointer-events-none absolute inset-0 z-0 ${className}`}
+      className={`pointer-events-none fixed inset-0 z-0 ${className}`}
     />
   );
 };

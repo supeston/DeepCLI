@@ -10,7 +10,7 @@ import { ComparisonTable } from '../components/ComparisonTable';
 import { DownloadSection } from '../components/DownloadSection';
 import { Footer } from '../components/Footer';
 
-describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
+describe('DeepX Landing Page Component Test Suite', () => {
   it('renders entire App without crashing', () => {
     const { container } = render(<App />);
     expect(container).toBeInTheDocument();
@@ -28,10 +28,14 @@ describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
     expect(githubLink).toHaveAttribute('href', 'https://github.com/supeston/DeepCLI');
   });
 
-  it('renders HeroSection with headline, DeepX text, and copy install button', () => {
+  it('renders HeroSection with Google Antigravity headline, DeepX artwork, and copy install button', () => {
     render(<HeroSection />);
-    expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/DeepX/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Experience liftoff with the/i)).toBeInTheDocument();
+    expect(screen.getByText(/next-gen agent platform/i)).toBeInTheDocument();
+
+    const heroLogo = screen.getByAltText('DeepX');
+    expect(heroLogo).toBeInTheDocument();
+    expect(heroLogo).toHaveAttribute('src', 'full_logo.png');
 
     const copyBtn = screen.getByTestId('hero-copy-cmd-btn');
     expect(copyBtn).toBeInTheDocument();
@@ -42,19 +46,19 @@ describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
   it('renders TerminalSimulator and allows switching scenario tabs', () => {
     render(<TerminalSimulator />);
     expect(screen.getByTestId('terminal-body')).toBeInTheDocument();
-    expect(screen.getByTestId('terminal-tab-conpty')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-tab-refactor')).toBeInTheDocument();
 
-    // Click WinRT Clipboard scenario tab
+    // Click ConPTY scenario tab
+    const conptyTab = screen.getByTestId('terminal-tab-conpty');
+    fireEvent.click(conptyTab);
+
+    // Click WinRT Clipboard tab
     const clipboardTab = screen.getByTestId('terminal-tab-clipboard');
     fireEvent.click(clipboardTab);
 
-    // Click Media Inspector tab
-    const mediaTab = screen.getByTestId('terminal-tab-media');
-    fireEvent.click(mediaTab);
-
-    // Copy terminal transcript
-    const copyTranscriptBtn = screen.getByTestId('terminal-copy-btn');
-    fireEvent.click(copyTranscriptBtn);
+    // Copy terminal prompt
+    const copyBtn = screen.getByTestId('terminal-copy-btn');
+    fireEvent.click(copyBtn);
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
 
@@ -82,11 +86,9 @@ describe('DeepX Landing Page Component Test Suite (Light Theme)', () => {
     expect(screen.getByText(/WinRT Clipboard Context/i)).toBeInTheDocument();
   });
 
-  it('renders DownloadSection with transparent log.png watermark and copy triggers', () => {
+  it('renders DownloadSection with installation steps and copy triggers', () => {
     render(<DownloadSection />);
     expect(screen.getByText(/Experience liftoff with/i)).toBeInTheDocument();
-    const watermark = screen.getByAltText('DeepX Watermark');
-    expect(watermark).toHaveAttribute('src', 'log.png');
 
     const copyBtn0 = screen.getByTestId('install-copy-btn-0');
     fireEvent.click(copyBtn0);

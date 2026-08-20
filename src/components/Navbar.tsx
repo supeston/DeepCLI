@@ -48,7 +48,7 @@ export const Navbar: React.FC = () => {
                     href="#features"
                     className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
                   >
-                    <Terminal className="w-4 h-4 text-[#1a73e8] mt-1 shrink-0" />
+                    <Terminal className="w-4 h-4 text-[#536DFE] mt-1 shrink-0" />
                     <div>
                       <div className="font-medium text-sm text-gray-900">DeepX CLI</div>
                       <div className="text-xs text-gray-500">Terminal-first ConPTY agent</div>
@@ -171,7 +171,7 @@ export const Navbar: React.FC = () => {
               <a
                 href="#download"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full py-2.5 rounded-full text-xs font-semibold text-center bg-[#1a73e8] text-white shadow-md shadow-[#1a73e8]/30"
+                className="w-full py-2.5 rounded-full text-xs font-semibold text-center bg-[#536DFE] text-white shadow-md shadow-[#536DFE]/30"
               >
                 Download for Windows
               </a>
