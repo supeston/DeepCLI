@@ -1,9 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Menu, X, Terminal, ChevronDown, ArrowUpRight, Download } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = (menu: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setActiveDropdown(menu);
+  };
+
+  const handleMouseLeave = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setActiveDropdown(null);
+    }, 180);
+  };
 
   return (
     <header
@@ -28,11 +44,11 @@ export const Navbar: React.FC = () => {
 
           {/* Middle Navigation (Desktop) */}
           <nav className="hidden lg:flex items-center gap-1.5 text-sm font-medium text-gray-600">
-            {/* Products Dropdown */}
+            {/* Products Dropdown with hover bridge */}
             <div
               className="relative"
-              onMouseEnter={() => setActiveDropdown('products')}
-              onMouseLeave={() => setActiveDropdown(null)}
+              onMouseEnter={() => handleMouseEnter('products')}
+              onMouseLeave={handleMouseLeave}
             >
               <button className="flex items-center gap-1 px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors">
                 <span>Products</span>
@@ -40,29 +56,36 @@ export const Navbar: React.FC = () => {
               </button>
 
               {activeDropdown === 'products' && (
-                <div className="absolute top-full left-0 mt-1 w-64 p-3 bg-white rounded-2xl border border-gray-200 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="text-[11px] font-semibold text-gray-400 px-3 py-1.5 uppercase tracking-wider">
-                    Core Surfaces
-                  </div>
-                  <a
-                    href="#features"
-                    className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
-                  >
-                    <Terminal className="w-4 h-4 text-[#536DFE] mt-1 shrink-0" />
-                    <div>
-                      <div className="font-medium text-sm text-gray-900">DeepX CLI</div>
-                      <div className="text-xs text-gray-500">Terminal-first ConPTY agent</div>
+                <div
+                  className="absolute top-full left-0 pt-2 w-64 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                  onMouseEnter={() => handleMouseEnter('products')}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-xl">
+                    <div className="text-[11px] font-semibold text-gray-400 px-3 py-1.5 uppercase tracking-wider">
+                      Core Surfaces
                     </div>
-                  </a>
+                    <a
+                      href="#terminal"
+                      onClick={() => setActiveDropdown(null)}
+                      className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                      <Terminal className="w-4 h-4 text-[#536DFE] mt-1 shrink-0" />
+                      <div>
+                        <div className="font-medium text-sm text-gray-900">DeepX CLI</div>
+                        <div className="text-xs text-gray-500">Terminal-first ConPTY agent</div>
+                      </div>
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Use Cases Dropdown */}
+            {/* Use Cases Dropdown with hover bridge */}
             <div
               className="relative"
-              onMouseEnter={() => setActiveDropdown('usecases')}
-              onMouseLeave={() => setActiveDropdown(null)}
+              onMouseEnter={() => handleMouseEnter('usecases')}
+              onMouseLeave={handleMouseLeave}
             >
               <button className="flex items-center gap-1 px-3 py-2 rounded-full hover:text-gray-900 hover:bg-gray-100 transition-colors">
                 <span>Use Cases</span>
@@ -70,16 +93,34 @@ export const Navbar: React.FC = () => {
               </button>
 
               {activeDropdown === 'usecases' && (
-                <div className="absolute top-full left-0 mt-1 w-64 p-3 bg-white rounded-2xl border border-gray-200 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150">
-                  <a href="#usecases" className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900">
-                    Frontend Engineering
-                  </a>
-                  <a href="#usecases" className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900">
-                    Full-Stack Systems
-                  </a>
-                  <a href="#usecases" className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900">
-                    Autonomous Code Review
-                  </a>
+                <div
+                  className="absolute top-full left-0 pt-2 w-64 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                  onMouseEnter={() => handleMouseEnter('usecases')}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-xl space-y-1">
+                    <a
+                      href="#usecases"
+                      onClick={() => setActiveDropdown(null)}
+                      className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                      Frontend Engineering
+                    </a>
+                    <a
+                      href="#usecases"
+                      onClick={() => setActiveDropdown(null)}
+                      className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                      Full-Stack Systems
+                    </a>
+                    <a
+                      href="#usecases"
+                      onClick={() => setActiveDropdown(null)}
+                      className="block p-2 rounded-xl hover:bg-gray-50 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                      Autonomous Code Review
+                    </a>
+                  </div>
                 </div>
               )}
             </div>
