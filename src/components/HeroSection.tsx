@@ -49,12 +49,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
   const typedSuffix = typedLength > PREFIX_TEXT.length ? FULL_TEXT.slice(PREFIX_TEXT.length, typedLength) : '';
 
   return (
-    <section className="relative min-h-[calc(100vh-2rem)] sm:min-h-screen flex flex-col justify-center items-center pt-28 pb-16 sm:pt-36 sm:pb-24 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
+    <section className="relative min-h-[100dvh] md:min-h-screen flex flex-col justify-center items-center pt-20 pb-12 sm:pt-36 sm:pb-24 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full my-auto">
         <div className="text-center max-w-4xl mx-auto">
-          {/* 1. Centered Brand Artwork - Slides down gracefully right after navbar items finish */}
+          {/* 1. Centered Brand Artwork */}
           <div
-            className={`flex items-center justify-center gap-3 mb-6 transition-all duration-600 ease-out delay-[600ms] ${
+            className={`flex items-center justify-center gap-3 mb-3 sm:mb-6 transition-all duration-600 ease-out delay-[600ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 -translate-y-6 pointer-events-none'
@@ -63,7 +63,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             <img
               src="full_logo.png"
               alt="DeepX"
-              className="h-10 sm:h-12 w-auto object-contain"
+              className="h-8 sm:h-12 w-auto object-contain"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = 'logo.png';
               }}
@@ -71,7 +71,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
           </div>
 
           {/* 2. Main Headline with Live Human Typing */}
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-10 leading-[1.08] min-h-[1.2em]">
+          <h1 className="text-3xl sm:text-6xl lg:text-7xl font-normal tracking-tight text-[#1F1F1F] mb-6 sm:mb-10 leading-[1.12] min-h-[1.2em]">
             <span>{typedPrefix}</span>
             {typedSuffix && <span className="font-medium">{typedSuffix}</span>}
             {!typingDone && (
@@ -79,12 +79,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             )}
           </h1>
 
-          {/* 3. Action CTAs - Staggered sequential flight */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+          {/* 3. Action CTAs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-12">
             {/* Download for Windows */}
             <button
               onClick={() => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' })}
-              className={`w-full sm:w-auto google-btn-primary px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[750ms] ${
+              className={`w-full sm:w-auto google-btn-primary px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[750ms] ${
                 typingDone
                   ? 'opacity-100 translate-y-0'
                   : 'opacity-0 translate-y-6 pointer-events-none'
@@ -98,7 +98,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             {/* Explore platform */}
             <button
               onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
-              className={`w-full sm:w-auto google-btn-secondary px-8 py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[900ms] ${
+              className={`w-full sm:w-auto google-btn-secondary px-6 sm:px-8 py-3 sm:py-3.5 text-sm font-medium cursor-pointer transition-all duration-600 ease-out delay-[900ms] ${
                 typingDone
                   ? 'opacity-100 translate-y-0'
                   : 'opacity-0 translate-y-6 pointer-events-none'
@@ -111,14 +111,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
 
           {/* 4. 1-Click Code Box with Smooth Border Beam on Copy */}
           <div
-            className={`max-w-xl mx-auto mb-4 transition-all duration-600 ease-out delay-[1050ms] ${
+            className={`max-w-xl mx-auto mb-2 sm:mb-4 transition-all duration-600 ease-out delay-[1050ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 translate-y-6 pointer-events-none'
             }`}
           >
             <div
-              className={`relative flex items-center justify-between p-3.5 pl-5 rounded-2xl bg-white border border-gray-200 transition-all duration-300 ${
+              className={`relative flex items-center justify-between p-3 sm:p-3.5 pl-4 sm:pl-5 rounded-2xl bg-white border border-gray-200 transition-all duration-300 ${
                 copied
                   ? 'border-[#536DFE]/60 shadow-xl shadow-[#536DFE]/20'
                   : 'shadow-lg shadow-gray-200/50'
@@ -152,13 +152,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
                 </svg>
               )}
 
-              <div className="flex items-center gap-3 overflow-hidden text-xs font-mono text-gray-600">
+              <div className="flex items-center gap-2.5 sm:gap-3 overflow-hidden text-[11px] sm:text-xs font-mono text-gray-600">
                 <span className="text-[#536DFE] select-none font-bold">PS&gt;</span>
                 <span className="truncate">{installCmd}</span>
               </div>
               <button
                 onClick={handleCopy}
-                className="ml-3 p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0 z-30"
+                className="ml-2.5 sm:ml-3 p-1.5 sm:p-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-500 hover:text-gray-900 border border-gray-200 transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer shrink-0 z-30"
                 aria-label="Copy install command"
                 data-testid="hero-copy-cmd-btn"
               >
