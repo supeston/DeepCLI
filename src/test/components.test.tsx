@@ -84,11 +84,15 @@ describe('DeepX Landing Page Component Test Suite', () => {
     expect(screen.getByText(/Community Edition/i)).toBeInTheDocument();
   });
 
-  it('renders ComparisonTable technical benchmark rows', () => {
+  it('renders ComparisonTable technical benchmark rows and competitor columns', () => {
     render(<ComparisonTable />);
-    expect(screen.getByText(/Interactive Terminal Execution/i)).toBeInTheDocument();
-    expect(screen.getByText(/Process Lifecycle & Zombie Cleanup/i)).toBeInTheDocument();
-    expect(screen.getByText(/WinRT Clipboard Context/i)).toBeInTheDocument();
+    expect(screen.getByText(/DeepX CLI/i)).toBeInTheDocument();
+    expect(screen.getByText(/Antigravity/i)).toBeInTheDocument();
+    expect(screen.getByText(/Claude Code/i)).toBeInTheDocument();
+    expect(screen.getByText(/Grok Build/i)).toBeInTheDocument();
+    expect(screen.getByText(/Codex/i)).toBeInTheDocument();
+    expect(screen.getByText(/Terminal Execution Engine/i)).toBeInTheDocument();
+    expect(screen.getByText(/Telemetry & Code Privacy/i)).toBeInTheDocument();
   });
 
   it('renders DownloadSection with installation steps and copy triggers', () => {
