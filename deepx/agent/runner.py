@@ -1132,6 +1132,32 @@ class DeepCLIApp:
                     break
 
                 empty_responses += 1
+
+                # After 2 failures, try creating a new chat to reset the DOM state
+                if empty_responses == 2:
+                    console.print(
+                        "\n[bold #F59E0B]Пустой ответ 2 раза. Пересоздаю чат...[/bold #F59E0B]"
+                    )
+                    try:
+                        await api.new_chat()
+                        await asyncio.sleep(1)
+                        await api.set_mode(self.mode)
+                        if self.mode == "instant":
+                            await api.set_search(self.search)
+                        await api.set_deepthink(self.think)
+                        # Rebuild system prompt for the fresh chat
+                        system_prompt = build_agent_system_prompt(
+                            self.agent_style, self.think, self.tools.cwd
+                        )
+                        current_prompt = (
+                            f"{system_prompt}\n\n[ПОЛЬЗОВАТЕЛЬСКИЙ ЗАПРОС]:\n"
+                            f"{original_goal}"
+                        )
+                    except Exception as e:
+                        console.print(
+                            f"[dim]Не удалось пересоздать чат: {e}[/dim]"
+                        )
+
                 if empty_responses > MAX_EMPTY_RESPONSE_RETRIES:
                     console.print(
                         f"\n[bold red]Пустой ответ {empty_responses} раз(а) подряд. "
@@ -1139,7 +1165,7 @@ class DeepCLIApp:
                     )
                     break
 
-                delay = 2 * empty_responses
+                delay = min(2 * empty_responses, 10)
                 console.print(
                     f"\n[bold #F59E0B]Пустой ответ от API (попытка {empty_responses} из "
                     f"{MAX_EMPTY_RESPONSE_RETRIES}). Повтор через {delay} с...[/bold #F59E0B]"

@@ -823,47 +823,46 @@ class DeepAPI:
             return {"think": "", "answer": ""}
 
     async def send_message(self, prompt: str, stream: bool = False):
-        # 1. Snapshot previous response state before sending so we NEVER re-read it
-        old_state = ""
+        # ── 1. Count existing message containers BEFORE sending ──────────
+        # Instead of fragile data-old-mark, we count ALL assistant response
+        # containers and then look for the (N+1)-th one after sending.
+        old_msg_count = 0
+        old_state_text = ""
         try:
-            last_el_init = self.page.locator(".ds-markdown, [class*='think']").last
-            if await last_el_init.count() > 0:
-                old_cont = last_el_init.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
-                if await old_cont.count() == 0:
-                    old_cont = last_el_init.locator("xpath=../..")
-                init_data = await self.extract_response_data(old_cont, is_generating=False)
-                old_state = (init_data.get("think", "") + "|||" + init_data.get("answer", "")).strip()
-        except Exception:
-            old_state = ""
+            # Count all response containers (assistant messages)
+            all_msgs = self.page.locator(
+                ".ds-markdown, [class*='think-content']"
+            )
+            old_msg_count = await all_msgs.count()
 
-        try:
-            await self.page.evaluate("""
-                document.querySelectorAll(".ds-markdown, [class*='think']").forEach(el => {
-                    el.dataset.oldMark = 'true';
-                });
-            """)
+            # Also snapshot the text of the last message
+            if old_msg_count > 0:
+                last_el = all_msgs.nth(old_msg_count - 1)
+                old_state_text = (await last_el.inner_text()).strip()[:500]
         except Exception:
             pass
 
+        # ── 2. Submit the message ────────────────────────────────────────
         chat_input = self.page.locator("textarea, div[contenteditable='true']").first
         await chat_input.wait_for(state="visible", timeout=15000)
         await chat_input.focus()
         await chat_input.fill(prompt)
 
-        # Ensure input event is dispatched to trigger React/Vue reactive state
+        # Also dispatch input events for React
         try:
             await self.page.evaluate("""
-                (promptText) => {
-                    const input = document.querySelector("textarea, div[contenteditable='true']");
-                    if (input) {
-                        if (input.tagName.toLowerCase() === 'textarea') {
-                            input.value = promptText;
-                            input.dispatchEvent(new Event('input', { bubbles: true }));
-                            input.dispatchEvent(new Event('change', { bubbles: true }));
-                        } else {
-                            input.innerText = promptText;
-                            input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
-                        }
+                (txt) => {
+                    const el = document.querySelector("textarea, div[contenteditable='true']");
+                    if (!el) return;
+                    if (el.tagName === 'TEXTAREA') {
+                        const nativeSet = Object.getOwnPropertyDescriptor(
+                            window.HTMLTextAreaElement.prototype, 'value'
+                        ).set;
+                        nativeSet.call(el, txt);
+                        el.dispatchEvent(new Event('input', {bubbles: true}));
+                    } else {
+                        el.innerText = txt;
+                        el.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText'}));
                     }
                 }
             """, prompt)
@@ -872,102 +871,134 @@ class DeepAPI:
 
         await asyncio.sleep(0.15)
 
-        # Click send button if visible or press Enter
-        submitted = False
-        try:
-            send_btn = self.page.locator(
-                "div[role='button'].ds-button--primary.ds-button--circle, "
-                "button.ds-button--primary.ds-button--circle, "
-                "button[aria-label*='Send' i], button[title*='Send' i], "
-                "button[aria-label*='Отправить' i], button[title*='Отправить' i], "
-                ".ds-icon-send, [class*='icon-send'], "
-                "button:has(svg), div[role='button']:has(svg)"
-            ).last
-            if await send_btn.count() > 0 and await send_btn.is_visible():
-                await send_btn.click(timeout=1500)
-                submitted = True
-        except Exception:
-            pass
-
-        if not submitted:
-            await chat_input.press("Enter")
-
-        # Wait for generation to start or for a new response element to be attached
-        target_container = None
-        start_wait = asyncio.get_running_loop().time()
-        while asyncio.get_running_loop().time() - start_wait < 45.0:
-            if await self.is_generating():
-                break
-
-            new_el_check = self.page.locator(
-                ".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])"
-            ).first
-            if await new_el_check.count() > 0:
-                break
-
-            # Check if text in the last message changed from old_state
+        # Try multiple submission methods
+        async def _try_submit():
+            """Attempt to click send button or press Enter. Returns True if click succeeded."""
             try:
-                last_el_check = self.page.locator(".ds-markdown, [class*='think']").last
-                if await last_el_check.count() > 0:
-                    curr_c = last_el_check.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
-                    if await curr_c.count() == 0:
-                        curr_c = last_el_check.locator("xpath=../..")
-                    cur_d = await self.extract_response_data(curr_c, is_generating=True)
-                    cur_s = (cur_d.get("think", "") + "|||" + cur_d.get("answer", "")).strip()
-                    if cur_s and cur_s != old_state:
+                # DeepSeek's send button: primary circle button near textarea
+                send_btn = self.page.locator(
+                    "div[role='button'].ds-button--primary.ds-button--circle, "
+                    "button.ds-button--primary.ds-button--circle"
+                ).last
+                if await send_btn.count() > 0 and await send_btn.is_visible():
+                    await send_btn.click(timeout=1500)
+                    return True
+            except Exception:
+                pass
+            try:
+                await chat_input.press("Enter")
+            except Exception:
+                pass
+            return False
+
+        await _try_submit()
+
+        # ── 3. Wait for the model to start responding ────────────────────
+        # We detect the new response by one of:
+        #   a) is_generating() returns True (Stop button appeared)
+        #   b) A new .ds-markdown element appeared (count increased)
+        #   c) The last message's text changed from old_state_text
+        loop = asyncio.get_running_loop()
+        submit_time = loop.time()
+        last_retry_submit = submit_time
+        new_response_detected = False
+
+        while loop.time() - submit_time < 60.0:
+            # Check: is model generating?
+            if await self.is_generating():
+                new_response_detected = True
+                break
+
+            # Check: did a new message element appear?
+            try:
+                current_count = await self.page.locator(
+                    ".ds-markdown, [class*='think-content']"
+                ).count()
+                if current_count > old_msg_count:
+                    new_response_detected = True
+                    break
+            except Exception:
+                pass
+
+            # Check: did the last message text change?
+            try:
+                all_msgs = self.page.locator(".ds-markdown, [class*='think-content']")
+                cnt = await all_msgs.count()
+                if cnt > 0:
+                    last_txt = (await all_msgs.nth(cnt - 1).inner_text()).strip()[:500]
+                    if last_txt and last_txt != old_state_text:
+                        new_response_detected = True
                         break
             except Exception:
                 pass
 
-            # If input still has text after 2.5 seconds, retry clicking send / pressing Enter
-            elapsed = asyncio.get_running_loop().time() - start_wait
-            if elapsed > 2.5 and int(elapsed * 2) % 4 == 0:
-                try:
-                    send_btn = self.page.locator(
-                        "div[role='button'].ds-button--primary.ds-button--circle, "
-                        "button.ds-button--primary.ds-button--circle, "
-                        "button[aria-label*='Send' i], button[title*='Send' i], "
-                        "button[aria-label*='Отправить' i], button[title*='Отправить' i]"
-                    ).last
-                    if await send_btn.count() > 0 and await send_btn.is_visible():
-                        await send_btn.click(timeout=1000)
-                    else:
-                        await chat_input.press("Enter")
-                except Exception:
-                    pass
+            # Retry submission every 3 seconds if nothing happened
+            elapsed = loop.time() - submit_time
+            if loop.time() - last_retry_submit > 3.0:
+                last_retry_submit = loop.time()
+                await _try_submit()
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.15)
 
-        new_el = self.page.locator(".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])").first
-        if await new_el.count() > 0:
-            target_container = new_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
-            if await target_container.count() == 0:
-                target_container = new_el.locator("xpath=../..")
-        else:
-            last_el = self.page.locator(".ds-markdown, [class*='think']").last
-            if await last_el.count() > 0:
-                target_container = last_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+        # ── 4. Find the target container for the NEW response ────────────
+        target_container = None
+        try:
+            all_msgs = self.page.locator(".ds-markdown, [class*='think-content']")
+            cnt = await all_msgs.count()
+            if cnt > old_msg_count:
+                # New element appeared — use the last one
+                new_el = all_msgs.nth(cnt - 1)
+                target_container = new_el.locator(
+                    "xpath=ancestor::div[contains(@class, 'message') or "
+                    "contains(@class, 'row') or contains(@class, 'chat') or "
+                    "contains(@class, 'ds-a')][1]"
+                )
+                if await target_container.count() == 0:
+                    target_container = new_el.locator("xpath=../..")
+            elif cnt > 0:
+                # Same count — text changed in the last element
+                last_el = all_msgs.nth(cnt - 1)
+                target_container = last_el.locator(
+                    "xpath=ancestor::div[contains(@class, 'message') or "
+                    "contains(@class, 'row') or contains(@class, 'chat') or "
+                    "contains(@class, 'ds-a')][1]"
+                )
                 if await target_container.count() == 0:
                     target_container = last_el.locator("xpath=../..")
+        except Exception:
+            pass
 
+        if not target_container or await target_container.count() == 0:
+            # Ultimate fallback
+            try:
+                last_el = self.page.locator(".ds-markdown, [class*='think']").last
+                if await last_el.count() > 0:
+                    target_container = last_el.locator("xpath=../..")
+            except Exception:
+                pass
+
+        # ── 5. Stream or wait for completion ─────────────────────────────
         if not stream:
             last_text_state = ""
-            loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
             has_started = False
-            start_wait_stream = loop.time()
+            wait_start = loop.time()
 
             while True:
                 generating = await self.is_generating()
-                data = await self.extract_response_data(target_container, is_generating=generating)
+                data = await self.extract_response_data(
+                    target_container, is_generating=generating
+                )
                 think_str = data["think"]
                 answer_str = data["answer"]
 
-                # If container still matches old_state, treat as not started yet
-                if old_state and (think_str + "|||" + answer_str).strip() == old_state:
-                    think_str = ""
-                    answer_str = ""
+                # Reject stale content from previous turn
+                if old_state_text and not has_started:
+                    curr_full = (think_str + " " + answer_str).strip()[:500]
+                    if curr_full == old_state_text:
+                        think_str = ""
+                        answer_str = ""
 
                 curr_state = (think_str + "|||" + answer_str).strip()
                 now = loop.time()
@@ -978,13 +1009,11 @@ class DeepAPI:
                     last_change_at = now
 
                 if not has_started:
-                    if generating:
+                    if generating or now - wait_start < 45.0:
                         await asyncio.sleep(0.05)
                         continue
-                    if now - start_wait_stream < 30.0:
-                        await asyncio.sleep(0.05)
-                        continue
-                    break
+                    # Timeout — no new content
+                    return ""
 
                 if (
                     generating
@@ -999,56 +1028,52 @@ class DeepAPI:
                     not_generating_since = now
 
                 if not generating and not_generating_since is not None:
-                    grace_seconds = 1.25 if answer_str else 8.0 if think_str else 4.0
+                    grace = 1.25 if answer_str else 8.0 if think_str else 4.0
                     if (
-                        now - last_change_at >= grace_seconds
-                        and now - not_generating_since >= grace_seconds
+                        now - last_change_at >= grace
+                        and now - not_generating_since >= grace
                     ):
-                        confirm_generating = await self.is_generating()
-                        confirm_data = await self.extract_response_data(
-                            target_container,
-                            is_generating=confirm_generating,
+                        # Double-check
+                        cg = await self.is_generating()
+                        cd = await self.extract_response_data(
+                            target_container, is_generating=cg
                         )
-                        c_think = confirm_data["think"]
-                        c_ans = confirm_data["answer"]
-                        if old_state and (c_think + "|||" + c_ans).strip() == old_state:
-                            c_think, c_ans = "", ""
-                        confirm_state = (c_think + "|||" + c_ans).strip()
-                        if confirm_generating or (confirm_state != curr_state and confirm_state):
-                            last_text_state = confirm_state
+                        cs = (cd["think"] + "|||" + cd["answer"]).strip()
+                        if cg or (cs != curr_state and cs):
+                            last_text_state = cs
                             last_change_at = loop.time()
-                            not_generating_since = (
-                                None if confirm_generating else last_change_at
-                            )
+                            not_generating_since = None if cg else last_change_at
                             continue
                         break
                 await asyncio.sleep(0.05)
 
-            data = await self.extract_response_data(target_container, is_generating=False)
-            res_think = data["think"]
-            res_ans = data["answer"]
-            if old_state and (res_think + "|||" + res_ans).strip() == old_state:
-                return ""
-            return res_ans
+            data = await self.extract_response_data(
+                target_container, is_generating=False
+            )
+            return data["answer"]
 
+        # ── Stream mode ──────────────────────────────────────────────────
         async def generator():
             last_text_state = ""
-            loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
             has_started = False
-            start_wait_stream = loop.time()
+            wait_start = loop.time()
 
             while True:
                 generating = await self.is_generating()
-                data = await self.extract_response_data(target_container, is_generating=generating)
+                data = await self.extract_response_data(
+                    target_container, is_generating=generating
+                )
                 think_str = data["think"]
                 answer_str = data["answer"]
 
-                # If container still matches old_state, treat as not started yet
-                if old_state and (think_str + "|||" + answer_str).strip() == old_state:
-                    think_str = ""
-                    answer_str = ""
+                # Reject stale content from previous turn
+                if old_state_text and not has_started:
+                    curr_full = (think_str + " " + answer_str).strip()[:500]
+                    if curr_full == old_state_text:
+                        think_str = ""
+                        answer_str = ""
 
                 curr_state = (think_str + "|||" + answer_str).strip()
                 now = loop.time()
@@ -1058,15 +1083,13 @@ class DeepAPI:
                     last_text_state = curr_state
                     last_change_at = now
 
-                # Wait for generation to start and produce content (up to 30 seconds for DeepThink)
+                # Wait for new content — generous timeout
                 if not has_started:
-                    if generating:
+                    if generating or now - wait_start < 45.0:
                         await asyncio.sleep(0.05)
                         continue
-                    if now - start_wait_stream < 30.0:
-                        await asyncio.sleep(0.05)
-                        continue
-                    break
+                    # No new content after long wait
+                    return
 
                 complete_tool_call_stalled = (
                     generating
@@ -1085,33 +1108,28 @@ class DeepAPI:
                     break
 
                 if not generating and not_generating_since is not None:
-                    grace_seconds = 1.25 if answer_str else 8.0 if think_str else 4.0
+                    grace = 1.25 if answer_str else 8.0 if think_str else 4.0
                     if (
-                        now - last_change_at >= grace_seconds
-                        and now - not_generating_since >= grace_seconds
+                        now - last_change_at >= grace
+                        and now - not_generating_since >= grace
                     ):
-                        confirm_generating = await self.is_generating()
-                        final_data = await self.extract_response_data(
-                            target_container,
-                            is_generating=confirm_generating,
+                        cg = await self.is_generating()
+                        fd = await self.extract_response_data(
+                            target_container, is_generating=cg
                         )
-                        f_think = final_data["think"]
-                        f_ans = final_data["answer"]
-                        if old_state and (f_think + "|||" + f_ans).strip() == old_state:
-                            f_think, f_ans = "", ""
-
-                        final_state = (f_think + "|||" + f_ans).strip()
-                        if confirm_generating or (final_state != curr_state and final_state):
-                            last_text_state = final_state
+                        f_think = fd["think"]
+                        f_ans = fd["answer"]
+                        if old_state_text and not has_started:
+                            cf = (f_think + " " + f_ans).strip()[:500]
+                            if cf == old_state_text:
+                                f_think, f_ans = "", ""
+                        fs = (f_think + "|||" + f_ans).strip()
+                        if cg or (fs != curr_state and fs):
+                            last_text_state = fs
                             last_change_at = loop.time()
-                            not_generating_since = (
-                                None if confirm_generating else last_change_at
-                            )
+                            not_generating_since = None if cg else last_change_at
                             continue
-                        yield {
-                            "think": f_think,
-                            "answer": f_ans,
-                        }
+                        yield {"think": f_think, "answer": f_ans}
                         break
 
                 await asyncio.sleep(0.02)

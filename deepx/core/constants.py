@@ -46,7 +46,7 @@ MAX_TOOL_FEEDBACK_CHARS = 60000
                                                                                          
 TODO_NUDGE_AFTER_TOOLS = 4
                                                                                          
-MAX_EMPTY_RESPONSE_RETRIES = 4
+MAX_EMPTY_RESPONSE_RETRIES = 6
 # The conversation already contains the original request. Repeat it only
 # occasionally during unusually long autonomous runs to prevent goal drift.
 TASK_GOAL_REMINDER_INTERVAL = 8
