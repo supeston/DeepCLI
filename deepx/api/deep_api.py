@@ -880,7 +880,8 @@ class DeepAPI:
                 "button.ds-button--primary.ds-button--circle, "
                 "button[aria-label*='Send' i], button[title*='Send' i], "
                 "button[aria-label*='Отправить' i], button[title*='Отправить' i], "
-                ".ds-icon-send, [class*='icon-send']"
+                ".ds-icon-send, [class*='icon-send'], "
+                "button:has(svg), div[role='button']:has(svg)"
             ).last
             if await send_btn.count() > 0 and await send_btn.is_visible():
                 await send_btn.click(timeout=1500)
@@ -894,7 +895,7 @@ class DeepAPI:
         # Wait for generation to start or for a new response element to be attached
         target_container = None
         start_wait = asyncio.get_running_loop().time()
-        while asyncio.get_running_loop().time() - start_wait < 35.0:
+        while asyncio.get_running_loop().time() - start_wait < 45.0:
             if await self.is_generating():
                 break
 
@@ -918,7 +919,7 @@ class DeepAPI:
             except Exception:
                 pass
 
-            # If input still has text after 2.5 seconds, retry clicking send
+            # If input still has text after 2.5 seconds, retry clicking send / pressing Enter
             elapsed = asyncio.get_running_loop().time() - start_wait
             if elapsed > 2.5 and int(elapsed * 2) % 4 == 0:
                 try:
@@ -950,36 +951,44 @@ class DeepAPI:
                     target_container = last_el.locator("xpath=../..")
 
         if not stream:
-            last_text_state = old_state
+            last_text_state = ""
             loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
-            has_seen_new_content = False
+            has_started = False
             start_wait_stream = loop.time()
 
             while True:
                 generating = await self.is_generating()
                 data = await self.extract_response_data(target_container, is_generating=generating)
-                curr_state = (data["think"] + "|||" + data["answer"]).strip()
+                think_str = data["think"]
+                answer_str = data["answer"]
+
+                # If container still matches old_state, treat as not started yet
+                if old_state and (think_str + "|||" + answer_str).strip() == old_state:
+                    think_str = ""
+                    answer_str = ""
+
+                curr_state = (think_str + "|||" + answer_str).strip()
                 now = loop.time()
 
-                if curr_state and curr_state != old_state and curr_state != last_text_state:
-                    has_seen_new_content = True
+                if curr_state and curr_state != last_text_state:
+                    has_started = True
                     last_text_state = curr_state
                     last_change_at = now
 
-                if not has_seen_new_content:
+                if not has_started:
                     if generating:
                         await asyncio.sleep(0.05)
                         continue
-                    if now - start_wait_stream < 4.0:
+                    if now - start_wait_stream < 30.0:
                         await asyncio.sleep(0.05)
                         continue
                     break
 
                 if (
                     generating
-                    and _has_complete_tool_call(data["answer"])
+                    and _has_complete_tool_call(answer_str)
                     and now - last_change_at >= COMPLETE_TOOL_CALL_STALL_SECONDS
                 ):
                     break
@@ -990,7 +999,7 @@ class DeepAPI:
                     not_generating_since = now
 
                 if not generating and not_generating_since is not None:
-                    grace_seconds = 1.25 if data["answer"] else 8.0 if data["think"] else 4.0
+                    grace_seconds = 1.25 if answer_str else 8.0 if think_str else 4.0
                     if (
                         now - last_change_at >= grace_seconds
                         and now - not_generating_since >= grace_seconds
@@ -1000,10 +1009,12 @@ class DeepAPI:
                             target_container,
                             is_generating=confirm_generating,
                         )
-                        confirm_state = (
-                            confirm_data["think"] + "|||" + confirm_data["answer"]
-                        ).strip()
-                        if confirm_generating or (confirm_state != curr_state and confirm_state != old_state):
+                        c_think = confirm_data["think"]
+                        c_ans = confirm_data["answer"]
+                        if old_state and (c_think + "|||" + c_ans).strip() == old_state:
+                            c_think, c_ans = "", ""
+                        confirm_state = (c_think + "|||" + c_ans).strip()
+                        if confirm_generating or (confirm_state != curr_state and confirm_state):
                             last_text_state = confirm_state
                             last_change_at = loop.time()
                             not_generating_since = (
@@ -1014,17 +1025,18 @@ class DeepAPI:
                 await asyncio.sleep(0.05)
 
             data = await self.extract_response_data(target_container, is_generating=False)
-            curr_s = (data["think"] + "|||" + data["answer"]).strip()
-            if curr_s == old_state:
+            res_think = data["think"]
+            res_ans = data["answer"]
+            if old_state and (res_think + "|||" + res_ans).strip() == old_state:
                 return ""
-            return data["answer"]
+            return res_ans
 
         async def generator():
-            last_text_state = old_state
+            last_text_state = ""
             loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
-            has_seen_new_content = False
+            has_started = False
             start_wait_stream = loop.time()
 
             while True:
@@ -1032,23 +1044,28 @@ class DeepAPI:
                 data = await self.extract_response_data(target_container, is_generating=generating)
                 think_str = data["think"]
                 answer_str = data["answer"]
-                curr_state = (think_str + "|||" + answer_str).strip()
 
+                # If container still matches old_state, treat as not started yet
+                if old_state and (think_str + "|||" + answer_str).strip() == old_state:
+                    think_str = ""
+                    answer_str = ""
+
+                curr_state = (think_str + "|||" + answer_str).strip()
                 now = loop.time()
-                if curr_state and curr_state != old_state and curr_state != last_text_state:
-                    has_seen_new_content = True
+
+                if curr_state and curr_state != last_text_state:
+                    has_started = True
                     last_text_state = curr_state
                     last_change_at = now
 
-                # Do NOT yield stale previous turn output!
-                if not has_seen_new_content:
+                # Wait for generation to start and produce content (up to 30 seconds for DeepThink)
+                if not has_started:
                     if generating:
                         await asyncio.sleep(0.05)
                         continue
-                    if now - start_wait_stream < 4.0:
+                    if now - start_wait_stream < 30.0:
                         await asyncio.sleep(0.05)
                         continue
-                    # Never yield old state if generation didn't start
                     break
 
                 complete_tool_call_stalled = (
@@ -1078,10 +1095,13 @@ class DeepAPI:
                             target_container,
                             is_generating=confirm_generating,
                         )
-                        final_state = (
-                            final_data["think"] + "|||" + final_data["answer"]
-                        ).strip()
-                        if confirm_generating or (final_state != curr_state and final_state != old_state):
+                        f_think = final_data["think"]
+                        f_ans = final_data["answer"]
+                        if old_state and (f_think + "|||" + f_ans).strip() == old_state:
+                            f_think, f_ans = "", ""
+
+                        final_state = (f_think + "|||" + f_ans).strip()
+                        if confirm_generating or (final_state != curr_state and final_state):
                             last_text_state = final_state
                             last_change_at = loop.time()
                             not_generating_since = (
@@ -1089,8 +1109,8 @@ class DeepAPI:
                             )
                             continue
                         yield {
-                            "think": final_data["think"],
-                            "answer": final_data["answer"],
+                            "think": f_think,
+                            "answer": f_ans,
                         }
                         break
 
