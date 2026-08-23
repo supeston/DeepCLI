@@ -833,37 +833,80 @@ class DeepAPI:
             pass
 
         chat_input = self.page.locator("textarea, div[contenteditable='true']").first
-        await chat_input.wait_for(state="visible", timeout=10000)
+        await chat_input.wait_for(state="visible", timeout=15000)
         await chat_input.fill(prompt)
-        await asyncio.sleep(0.1)
-        await chat_input.press("Enter")
+        await asyncio.sleep(0.15)
 
-        target_container = None
-        new_el = self.page.locator(".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])").first
-        
+        # Click send button if visible or press Enter
+        submitted = False
         try:
-            await new_el.wait_for(
-                state="attached",
-                timeout=RESPONSE_ELEMENT_ATTACH_TIMEOUT_MS,
-            )
-            target_container = new_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
-            if await target_container.count() == 0:
-                target_container = new_el.locator("xpath=../..")
+            send_btn = self.page.locator(
+                "div[role='button'].ds-button--primary.ds-button--circle, "
+                "button.ds-button--primary.ds-button--circle, "
+                "button[aria-label*='Send' i], button[title*='Send' i], "
+                "button[aria-label*='Отправить' i], button[title*='Отправить' i], "
+                ".ds-icon-send, [class*='icon-send']"
+            ).last
+            if await send_btn.count() > 0 and await send_btn.is_visible():
+                await send_btn.click(timeout=1500)
+                submitted = True
         except Exception:
             pass
 
-        if not target_container or await target_container.count() == 0:
-            last_el = self.page.locator(".ds-markdown, [class*='think']").last
-            target_container = last_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
-            if await target_container.count() == 0:
-                target_container = last_el.locator("xpath=../..")
+        if not submitted:
+            await chat_input.press("Enter")
 
-        for _ in range(100):
+        # Wait for generation to start or for a new response element to be attached
+        target_container = None
+        start_wait = asyncio.get_running_loop().time()
+        while asyncio.get_running_loop().time() - start_wait < 35.0:
             if await self.is_generating():
                 break
-            data = await self.extract_response_data(target_container, is_generating=False)
-            if data["think"] or data["answer"]:
+
+            new_el_check = self.page.locator(
+                ".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])"
+            ).first
+            if await new_el_check.count() > 0:
                 break
+
+            # If input still has text after 3 seconds, retry clicking send
+            elapsed = asyncio.get_running_loop().time() - start_wait
+            if elapsed > 2.5 and int(elapsed * 2) % 4 == 0:
+                try:
+                    send_btn = self.page.locator(
+                        "div[role='button'].ds-button--primary.ds-button--circle, "
+                        "button.ds-button--primary.ds-button--circle, "
+                        "button[aria-label*='Send' i], button[title*='Send' i], "
+                        "button[aria-label*='Отправить' i], button[title*='Отправить' i]"
+                    ).last
+                    if await send_btn.count() > 0 and await send_btn.is_visible():
+                        await send_btn.click(timeout=1000)
+                    else:
+                        await chat_input.press("Enter")
+                except Exception:
+                    pass
+
+            await asyncio.sleep(0.1)
+
+        new_el = self.page.locator(".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])").first
+        if await new_el.count() > 0:
+            target_container = new_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+            if await target_container.count() == 0:
+                target_container = new_el.locator("xpath=../..")
+        else:
+            last_el = self.page.locator(".ds-markdown, [class*='think']").last
+            if await last_el.count() > 0:
+                target_container = last_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+                if await target_container.count() == 0:
+                    target_container = last_el.locator("xpath=../..")
+
+        for _ in range(120):
+            if await self.is_generating():
+                break
+            if target_container and await target_container.count() > 0:
+                data = await self.extract_response_data(target_container, is_generating=False)
+                if data["think"] or data["answer"]:
+                    break
             await asyncio.sleep(0.05)
 
         if not stream:
