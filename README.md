@@ -74,6 +74,15 @@
 ### 9. Параллельное выполнение безопасных инструментов
 - Contiguous read-only инструменты (`read_file`, `web_search`, `fetch_url`, `dadata_osint`, `list_dir`) исполняются параллельно, значительно ускоряя исследовательские задачи.
 
+### 10. Прямой VDS/VPS Деплой-движок (`vds_deploy`)
+- Полнофункциональный инструмент автономного удалённого администрирования и развёртывания:
+  - ⚡ **Мгновенный SSH/SFTP пул соединений** — постоянные сессии без задержек и без зависаний стандартного OpenSSH Windows на запросах паролей.
+  - 🚀 **Команды и скрипты** — выполнение удалённых bash-команд (`exec`) и многострочных скриптов (`script`) с флагом `-e` и `sudo`.
+  - 📁 **Скоростной SFTP-деплой** — синхронизация файлов и директорий (`upload`/`download`) с умным исключением мусора (`.git`, `__pycache__`, `.venv`, `node_modules`).
+  - ⚙️ **Управление сервисами и Docker** — готовые действия для Systemd (`service`: `start`, `restart`, `logs`, `status`) и Docker Compose (`docker`: `up`, `logs`, `ps`).
+  - 🎯 **One-Click Quick Deploy** — комплексный пайплайн (`quick_deploy`): загрузка проекта -> запуск команд сборки -> конфигурация/перезапуск сервиса -> healthcheck.
+  - 🔐 **Профили серверов** — сохранение реквизитов серверов (`save_profile`, `list_profiles`) в `.deepx/vds_profiles.json` и поддержка `.env` (`VDS_HOST`, `VDS_USER`, `VDS_PASSWORD`, `VDS_KEY_PATH`).
+
 ---
 
 ## 🛠 Архитектура и стек инструментов
@@ -100,6 +109,7 @@ DeepCLI / DEEPX
     │   ├── media_inspector.py# Инспектор медиа-файлов
     │   ├── system.py         # run_cmd, run_python, run_background_cmd, task_status/log
     │   ├── filesystem.py     # read_file, write_file, edit_file, list_dir, file_info
+    │   ├── vds.py            # vds_deploy (SSH/SFTP пул, команды, Systemd, Docker, Quick Deploy)
     │   ├── browser.py        # browser_action (Playwright)
     │   ├── documents.py      # make_excel, make_docx, make_pptx, zip_pack, unzip_pack
     │   ├── web.py            # web_search, fetch_url
@@ -119,8 +129,8 @@ DeepCLI / DEEPX
 
 | Стиль | Описание | Доступные ключевые инструменты |
 |---|---|---|
-| 💻 **`CODER`** *(по умолчанию)* | Системный разработчик и инженер. Проектирование, чистый код, рефакторинг, отладка, тесты, запуск команд и браузерная отладка. | `run_cmd`, `run_python`, `run_background_cmd`, `read_file`, `write_file`, `edit_file`, `web_search`, `browser_action`, `todo`, `project_memory` |
-| 🌐 **`UNIVERSAL`** | Аналитик, копирайтер и продуктовый ассистент. Исследования, тексты, аналитические сводки и создание готовых офисных файлов. | Все базовые инструменты + `make_excel`, `make_docx`, `make_pptx`, `zip_pack`, `unzip_pack` |
+| 💻 **`CODER`** *(по умолчанию)* | Системный разработчик и инженер. Проектирование, чистый код, рефакторинг, отладка, тесты, запуск команд, VDS/SSH деплой и браузерная отладка. | `run_cmd`, `run_python`, `run_background_cmd`, `vds_deploy`, `read_file`, `write_file`, `edit_file`, `web_search`, `browser_action`, `todo`, `project_memory` |
+| 🌐 **`UNIVERSAL`** | Аналитик, копирайтер и продуктовый ассистент. Исследования, тексты, аналитические сводки, деплой и создание готовых офисных файлов. | Все базовые инструменты + `vds_deploy`, `make_excel`, `make_docx`, `make_pptx`, `zip_pack`, `unzip_pack` |
 | 🕵️‍♂️ **`OSINTER`** | Специалист по Deep Research и цифровой разведке. Проверка контрагентов, анализ Telegram-аккаунтов, поиск по реестрам, анализ инфраструктуры. | `funstat_osint`, `dadata_osint`, `web_search`, `fetch_url`, `browser_action`, `run_python`, `make_docx`, `make_excel` *(включена защита ядра)* |
 
 ---

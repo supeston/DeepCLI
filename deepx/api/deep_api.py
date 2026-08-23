@@ -34,10 +34,10 @@ def _has_complete_tool_call(text: str) -> bool:
     """Return True only after a supported tool-call block is closed."""
     value = str(text or "")
     return bool(
-        re.search(r"```tool_call\s*\n?.+?\n?```", value, re.DOTALL)
-        or re.search(r"<tool_call>\s*.+?\s*</tool_call>", value, re.DOTALL)
-        or re.search(r"<tool_calls>\s*.+?\s*</tool_calls>", value, re.DOTALL)
-        or re.search(r"<invoke\b.+?</invoke\s*>", value, re.DOTALL)
+        re.search(r"```(?:tool_call|tool_calls|tools|tool|json)?\s*\n?.+?\n?```", value, re.DOTALL)
+        or re.search(r"<(?:tool_call|function_call)>\s*.+?\s*</(?:tool_call|function_call)>", value, re.DOTALL | re.IGNORECASE)
+        or re.search(r"<tool_calls>\s*.+?\s*</tool_calls>", value, re.DOTALL | re.IGNORECASE)
+        or re.search(r"<invoke\b.+?</invoke\s*>", value, re.DOTALL | re.IGNORECASE)
     )
 
 

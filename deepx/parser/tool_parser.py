@@ -50,8 +50,10 @@ def parse_json_lenient(json_str: str):
     - Standard JSON
     - Unescaped newlines and tabs inside multiline strings (strict=False)
     - Triple quoted strings inside JSON
+    - Missing 'tool': key (e.g. {"run_cmd", "args": {...}} or {'run_cmd', 'args': ...})
     - Unescaped Windows backslashes in paths (C:\\path or C:\\path\\telegram)
     - Trailing commas before closing braces/brackets
+    - Single quoted strings and Python literals
     """
     if not json_str or not json_str.strip():
         return None
@@ -64,7 +66,20 @@ def parse_json_lenient(json_str: str):
             return f'{key}"{val_fixed}"'
         return re.sub(r'("path"\s*:\s*)"([^"]+)"', replace_path, text)
 
-    s = fix_windows_paths(json_str)
+    s = fix_windows_paths(json_str.strip())
+
+    # Fix malformed missing "tool": key (e.g. {"run_cmd", "args": {...}} or {'run_cmd', 'args': ...})
+    s = re.sub(
+        r'\{\s*(["\'])([a-zA-Z0-9_\-]+)\1\s*,\s*(["\'])(args|arguments|parameters|params|kwargs|action_input|command|path|code|content)\3\s*:',
+        r'{"tool": "\2", "\4":',
+        s,
+    )
+    # Fix standalone tool name as first key-less entry: {"run_cmd", ...}
+    s = re.sub(
+        r'\{\s*(["\'])([a-zA-Z0-9_\-]+)\1\s*,\s*',
+        r'{"tool": "\2", ',
+        s,
+    )
 
     def replace_triple_quotes(match):
         prefix = match.group(1)
@@ -74,7 +89,12 @@ def parse_json_lenient(json_str: str):
 
     s = re.sub(r'("[\w_]+"\s*:\s*)"""(.*?)"""', replace_triple_quotes, s, flags=re.DOTALL)
     s = re.sub(r"('[\w_]+'\s*:\s*)'''(.*?)'''", replace_triple_quotes, s, flags=re.DOTALL)
-    s_no_trailing = re.sub(r',\s*([\}])', r'\1', s)
+    s_no_trailing = re.sub(r',\s*([\}\]])', r'\1', s)
+
+    # Replace Python True/False/None if unquoted
+    s_no_trailing = re.sub(r'\bTrue\b', 'true', s_no_trailing)
+    s_no_trailing = re.sub(r'\bFalse\b', 'false', s_no_trailing)
+    s_no_trailing = re.sub(r'\bNone\b', 'null', s_no_trailing)
 
     try:
         return json.loads(s_no_trailing, strict=False)
@@ -97,17 +117,59 @@ def parse_json_lenient(json_str: str):
         repaired = re.sub(r'\\(?![\\"/bfnrtu])', r'\\\\', repaired)
         return json.loads(repaired, strict=False)
     except Exception:
+        pass
+
+    try:
+        single_to_double = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', s_no_trailing)
+        return json.loads(single_to_double, strict=False)
+    except Exception:
         return None
 
+
+def _dict_to_tool_call(data: dict):
+    if not isinstance(data, dict):
+        return None
+
+    # Check for direct 'tool' or aliases
+    for tool_key in ("tool", "name", "function", "action", "tool_name"):
+        if tool_key in data and isinstance(data[tool_key], str):
+            tool_name = data[tool_key].strip()
+            args = None
+            for args_key in ("args", "arguments", "parameters", "params", "kwargs", "action_input"):
+                if args_key in data:
+                    args = data[args_key]
+                    break
+            if args is None:
+                # Flat args
+                args = {k: v for k, v in data.items() if k not in (tool_key, "thought", "reasoning", "type", "id")}
+            elif isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {"input": args}
+            elif not isinstance(args, dict):
+                args = {"input": args}
+            return {"tool": tool_name, "args": args}
+
+    # Single key dict where key is the tool name (e.g. {"run_cmd": {"command": "..."}})
+    if len(data) == 1:
+        k, v = next(iter(data.items()))
+        if isinstance(v, dict):
+            return {"tool": k.strip(), "args": v}
+        elif isinstance(v, str) and k not in ("error", "message", "status", "response"):
+            return {"tool": k.strip(), "args": {"command" if "cmd" in k else "path" if "file" in k else "input": v}}
+
+    return None
+
+
 def extract_tool_calls(text: str):
-                                                                                                 
+    if not text or not str(text).strip():
+        return []
+
     calls = []
 
-    # DeepSeek Expert sometimes emits the native function-call XML used by
-    # other clients instead of DEEPX's documented JSON envelope:
-    # <tool_calls><invoke name="read_file"><parameter name="path">...</parameter>
-    # </invoke></tool_calls>.  Accept it so the call is executed rather than
-    # leaked to the terminal as ordinary assistant text.
+    # 1. Native XML function-call format:
+    # <invoke name="read_file"><parameter name="path">...</parameter></invoke>
     invoke_matches = re.findall(
         r"<invoke\b[^>]*\bname\s*=\s*(['\"])(.*?)\1[^>]*>(.*?)</invoke\s*>",
         text,
@@ -132,66 +194,100 @@ def extract_tool_calls(text: str):
         }
         if call_obj["tool"] and call_obj not in calls:
             calls.append(call_obj)
-    
-                                            
-    xml_matches = re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.DOTALL)
+
+    # 2. XML <tool_call>...</tool_call> or <function_call>...</function_call>
+    xml_matches = re.findall(r"<(?:tool_call|function_call)>\s*(.*?)\s*</(?:tool_call|function_call)>", text, re.DOTALL | re.IGNORECASE)
     for match in xml_matches:
-        match_str = match.strip()
-        cleaned = re.sub(r"^```(?:\w+)?\s*", "", match_str)
+        cleaned = re.sub(r"^```(?:\w+)?\s*", "", match.strip())
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
         data = parse_json_lenient(cleaned)
-        if isinstance(data, dict) and "tool" in data:
-            if data not in calls:
-                calls.append(data)
-            continue
+        if isinstance(data, dict):
+            tc = _dict_to_tool_call(data)
+            if tc and tc not in calls:
+                calls.append(tc)
+                continue
 
-        tool_m = re.search(r"^tool:\s*(\w+)", cleaned, re.MULTILINE)
+        # Check key-value format inside XML
+        tool_m = re.search(r"^(?:tool|name|action):\s*(\w+)", cleaned, re.MULTILINE | re.IGNORECASE)
         if tool_m:
             tool_name = tool_m.group(1).strip()
-            path_m = re.search(r"^path:\s*(.+)$", cleaned, re.MULTILINE)
-            cmd_m = re.search(r"^command:\s*(.+)$", cleaned, re.MULTILINE)
-
-            code_block_m = re.search(r"```(?:\w+)?\s*\n(.*)\n```", cleaned, re.DOTALL)
-
+            path_m = re.search(r"^path:\s*(.+)$", cleaned, re.MULTILINE | re.IGNORECASE)
+            cmd_m = re.search(r"^command:\s*(.+)$", cleaned, re.MULTILINE | re.IGNORECASE)
             args = {}
             if path_m:
                 args["path"] = path_m.group(1).strip()
             if cmd_m:
                 args["command"] = cmd_m.group(1).strip()
-
-            if code_block_m:
-                args["content"] = code_block_m.group(1)
-            elif "content:" in cleaned:
-                cont_parts = cleaned.split("content:", 1)
-                raw_cont = cont_parts[1].lstrip("\n\r")
-                raw_cont = re.sub(r"```(?:\w+)?\s*\n(.*)\n```$", r"\1", raw_cont, flags=re.DOTALL).strip()
-                if raw_cont.startswith("```"):
-                    raw_cont = re.sub(r"^```(?:\w+)?\n?(.*?)\n?```$", r"\1", raw_cont, flags=re.DOTALL)
-                args["content"] = raw_cont
-
             call_obj = {"tool": tool_name, "args": args}
             if call_obj not in calls:
                 calls.append(call_obj)
 
-                                                      
-    md_matches = re.findall(r"```tool_call\s*\n?(.*?)\n?```", text, re.DOTALL)
-    for match in md_matches:
+    # 3. Markdown code blocks: ```tool_call, ```tool_calls, ```tool, ```json, ```
+    code_block_matches = re.findall(r"```(?:tool_call|tool_calls|tools|tool|json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    for match in code_block_matches:
         match_str = match.strip()
-        cleaned = re.sub(r"^<tool_call>\s*", "", match_str)
-        cleaned = re.sub(r"\s*</tool_call>$", "", cleaned).strip()
-        data = parse_json_lenient(cleaned)
-        if isinstance(data, dict) and "tool" in data and data not in calls:
-            calls.append(data)
+        if not match_str:
+            continue
+        cleaned = re.sub(r"^<(?:tool_call|function_call)>\s*", "", match_str, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*</(?:tool_call|function_call)>$", "", cleaned, flags=re.IGNORECASE).strip()
 
-                                    
-    json_matches = re.findall(r"```json\s*\n?(.*?)\n?```", text, re.DOTALL)
-    for match in json_matches:
-        match_str = match.strip()
-        cleaned = re.sub(r"^<tool_call>\s*", "", match_str)
-        cleaned = re.sub(r"\s*</tool_call>$", "", cleaned).strip()
         data = parse_json_lenient(cleaned)
-        if isinstance(data, dict) and "tool" in data and data not in calls:
-            calls.append(data)
+        if isinstance(data, dict):
+            tc = _dict_to_tool_call(data)
+            if tc and tc not in calls:
+                calls.append(tc)
+                continue
+        elif isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    tc = _dict_to_tool_call(item)
+                    if tc and tc not in calls:
+                        calls.append(tc)
+            if calls:
+                continue
+
+        # Check key-value format inside markdown block
+        tool_m = re.search(r"^(?:tool|name|action):\s*(\w+)", cleaned, re.MULTILINE | re.IGNORECASE)
+        if tool_m:
+            tool_name = tool_m.group(1).strip()
+            path_m = re.search(r"^path:\s*(.+)$", cleaned, re.MULTILINE | re.IGNORECASE)
+            cmd_m = re.search(r"^command:\s*(.+)$", cleaned, re.MULTILINE | re.IGNORECASE)
+            code_block_m = re.search(r"```(?:\w+)?\s*\n(.*)\n```", cleaned, re.DOTALL)
+            args = {}
+            if path_m:
+                args["path"] = path_m.group(1).strip()
+            if cmd_m:
+                args["command"] = cmd_m.group(1).strip()
+            if code_block_m:
+                args["content"] = code_block_m.group(1)
+            call_obj = {"tool": tool_name, "args": args}
+            if call_obj not in calls:
+                calls.append(call_obj)
+                continue
+
+        # Function call style e.g. run_cmd(command="...")
+        fn_match = re.match(r"^([a-zA-Z0-9_]+)\s*\((.*)\)\s*$", cleaned, re.DOTALL)
+        if fn_match:
+            tool_name = fn_match.group(1)
+            raw_params = fn_match.group(2)
+            args = {}
+            for param in re.finditer(r'([a-zA-Z0-9_]+)\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^,)]+))', raw_params):
+                k = param.group(1)
+                v = param.group(2) if param.group(2) is not None else param.group(3) if param.group(3) is not None else param.group(4).strip()
+                args[k] = v
+            call_obj = {"tool": tool_name, "args": args}
+            if call_obj not in calls:
+                calls.append(call_obj)
+
+    # 4. Raw JSON without code fences in case model didn't fence it
+    if not calls:
+        raw_json_matches = re.finditer(r'\{\s*(?:["\']tool["\']|["\']name["\']|["\']function["\']|["\']action["\']|["\'][a-zA-Z0-9_]+["\']\s*,\s*["\']args["\']).*?\}', text, re.DOTALL)
+        for m in raw_json_matches:
+            data = parse_json_lenient(m.group(0))
+            if isinstance(data, dict):
+                tc = _dict_to_tool_call(data)
+                if tc and tc not in calls:
+                    calls.append(tc)
 
     return normalize_tool_calls(calls)
 

@@ -105,24 +105,20 @@ def get_clean_text(text: str) -> str:
         flags=re.IGNORECASE,
     )
     text = re.sub(r"^Глубокое размышление\s*", "", text, flags=re.IGNORECASE)
-                                                                                   
-                              
-    text = re.sub(r"\s*<tool_call>.*?(?:</tool_call>|$)", "", text, flags=re.DOTALL)
-    text = re.sub(r"\s*<tool_calls>.*?(?:</tool_calls>|$)", "", text, flags=re.DOTALL)
-    text = re.sub(r"\s*<invoke\b.*?(?:</invoke\s*>|$)", "", text, flags=re.DOTALL)
+    text = re.sub(r"\s*<(?:tool_call|function_call)>.*?(?:</(?:tool_call|function_call)>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"\s*<tool_calls>.*?(?:</tool_calls>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"\s*<invoke\b.*?(?:</invoke\s*>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
     
-                                                                                 
-    text = re.sub(r"\s*```tool_call\s*\n.*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
+    text = re.sub(r"\s*```(?:tool_call|tool_calls|tools|tool)\s*\n.*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
     
-                                                             
-    text = re.sub(r"\s*```json\s*\n.*?(?:\"tool\"|\"args\").*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
+    text = re.sub(r"\s*```json\s*\n.*?(?:\"tool\"|\"args\"|\"name\"|\"function\"|\"command\"|\"run_cmd\").*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
 
     # While streaming, the opening marker arrives character by character
     # (for example "`", "```to", "```tool_call"). Do not print those
     # temporary fragments or their leading blank lines before the complete
     # tool block can be recognized and removed by the expressions above.
     trimmed = text.rstrip()
-    for marker in ("```tool_call", "<tool_call>", "<tool_calls>", "<invoke"):
+    for marker in ("```tool_call", "```tool_calls", "```tools", "```tool", "<tool_call>", "<tool_calls>", "<invoke"):
         for prefix_length in range(len(marker), 0, -1):
             prefix = marker[:prefix_length]
             if trimmed.endswith(prefix):
@@ -144,22 +140,54 @@ class StableStreamText:
     append-safe and normally only one polling interval behind the browser.
     """
 
+class StableStreamText:
+    """Stabilizes streaming text from browser DOM to ensure smooth append-only progressive rendering."""
+
     def __init__(self):
         self._previous = ""
         self._committed = ""
 
     def update(self, text: str) -> str:
         current = str(text or "")
+        if not current:
+            return self._committed
+
+        # 1. Direct extension
+        if current.startswith(self._committed):
+            self._committed = current
+            self._previous = current
+            return self._committed
+
+        # 2. Extension ignoring trailing whitespace collapse
+        committed_stripped = self._committed.rstrip()
+        if committed_stripped and current.startswith(committed_stripped):
+            self._committed = current
+            self._previous = current
+            return self._committed
+
+        # 3. Common prefix with previous snapshot
         common_len = 0
-        for old_char, new_char in zip(self._previous, current):
-            if old_char != new_char:
+        for c1, c2 in zip(self._previous, current):
+            if c1 != c2:
                 break
             common_len += 1
+
         candidate = current[:common_len]
-        if candidate.startswith(self._committed):
+        candidate_stripped = candidate.rstrip()
+        if candidate_stripped.startswith(committed_stripped) and len(candidate) >= len(committed_stripped):
             self._committed = candidate
+        elif len(current) >= len(self._committed):
+            match_len = 0
+            for c1, c2 in zip(self._committed, current):
+                if c1 != c2:
+                    break
+                match_len += 1
+            if match_len >= len(committed_stripped):
+                self._committed = current[:max(match_len, common_len)]
+
         self._previous = current
         return self._committed
+
 
 
 def get_stable_stream_text(text: str) -> str:
@@ -337,12 +365,16 @@ def render_terminal_markup(text: str, final: bool = False) -> str:
                 heading = re.match(r"^(#{1,6})[ \t]+", source[i:])
                 if heading:
                     line_end = source.find("\n", i)
-                    if line_end < 0 and not final:
-                        break
-                    if line_end < 0:
-                        line_end = len(source)
                     content_start = i + heading.end()
                     heading_style = "\033[1;38;5;255m"
+                    if line_end < 0:
+                        if not final:
+                            output.append(heading_style)
+                            output.append(parse(source[content_start:], active_styles + (heading_style,)))
+                            output.append(reset)
+                            output.extend(active_styles)
+                            break
+                        line_end = len(source)
                     output.append(heading_style)
                     output.append(parse(
                         source[content_start:line_end],
@@ -355,11 +387,10 @@ def render_terminal_markup(text: str, final: bool = False) -> str:
                     i = line_end + (1 if line_end < len(source) else 0)
                     continue
                 if not final and source[i:].strip("#") == "":
+                    output.append(source[i:])
                     break
 
             if line_start and source[i] in "-+":
-                if i + 1 >= len(source) and not final:
-                    break
                 if i + 1 < len(source) and source[i + 1] in " \t":
                     output.append("• ")
                     i += 2
@@ -432,14 +463,20 @@ def render_terminal_markup(text: str, final: bool = False) -> str:
             if delimiter:
                 end = find_close(source, delimiter, i + len(delimiter))
                 if end < 0:
-                    if final:
-                        output.append(source[i + len(delimiter):])
+                    start_code = styles[delimiter]
+                    output.append(start_code)
+                    remaining = source[i + len(delimiter):]
+                    if delimiter in ("``", "`"):
+                        output.append(remaining)
+                    else:
+                        output.append(parse(remaining, active_styles + (start_code,)))
+                    output.append(reset)
+                    output.extend(active_styles)
                     break
                 content = source[i + len(delimiter):end]
                 start_code = styles[delimiter]
                 output.append(start_code)
                 if delimiter in ("``", "`"):
-                                                                                           
                     output.append(content)
                 else:
                     output.append(parse(content, active_styles + (start_code,)))

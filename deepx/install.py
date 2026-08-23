@@ -165,7 +165,7 @@ def perform_health_check(py_exec: Path) -> bool:
 import sys
 modules = [
     "rich", "prompt_toolkit", "pyperclip", "requests", "dotenv",
-    "openpyxl", "pandas", "docx", "pptx", "PIL", "pymediainfo", "playwright"
+    "openpyxl", "pandas", "docx", "pptx", "PIL", "pymediainfo", "playwright", "paramiko"
 ]
 if sys.platform == "win32":
     modules.extend(["winpty", "winsdk", "win32clipboard"])

@@ -973,7 +973,6 @@ class DeepCLIApp:
         while True:
             loop_count += 1
 
-                                                                                              
             if loop_count == 1:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
@@ -983,7 +982,6 @@ class DeepCLIApp:
             except Exception as send_error:
                 empty_responses += 1
                 message = str(send_error).replace("\n", " ")[:200]
-                                                                                        
                 console.print(
                     f"\nЗапрос не ушёл ({type(send_error).__name__}): {message}",
                     style="bold #F59E0B",
@@ -1041,20 +1039,24 @@ class DeepCLIApp:
                     if (
                         not stream_file_visual_was_shown
                         and len(cleaned) > len(printed_answer)
-                        and cleaned.startswith(printed_answer)
                     ):
-                        # stdout is append-only.  A rewritten DOM tail is held
-                        # back until it becomes a genuine extension instead of
-                        # being appended from the middle of changed output.
-                        new_chars = cleaned[len(printed_answer):]
-                        
-                                                                                     
-                        if not has_printed_text_this_turn:
-                            if loop_count > 1 and did_execute_tool:
-                                sys.stdout.write("\n")
-                            has_printed_text_this_turn = True
-                        stream_writer.push(new_chars)
-                        printed_answer = cleaned
+                        if cleaned.startswith(printed_answer):
+                            new_chars = cleaned[len(printed_answer):]
+                            if not has_printed_text_this_turn:
+                                if loop_count > 1 and did_execute_tool:
+                                    sys.stdout.write("\n")
+                                has_printed_text_this_turn = True
+                            stream_writer.push(new_chars)
+                            printed_answer = cleaned
+                        elif cleaned.startswith(printed_answer.rstrip("\n")):
+                            base = printed_answer.rstrip("\n")
+                            new_chars = cleaned[len(base):]
+                            if not has_printed_text_this_turn:
+                                if loop_count > 1 and did_execute_tool:
+                                    sys.stdout.write("\n")
+                                has_printed_text_this_turn = True
+                            stream_writer.push(new_chars)
+                            printed_answer = cleaned
 
                     pending_file_calls = self._detect_streaming_file_activities(
                         final_answer
@@ -1209,7 +1211,6 @@ class DeepCLIApp:
                             for call_index, call in enumerate(tool_calls)
                         )
 
-                                                                                
                     feedback = "\n\n".join(tool_outputs)
                     if len(feedback) > MAX_TOOL_FEEDBACK_CHARS:
                         feedback = (
@@ -1217,9 +1218,6 @@ class DeepCLIApp:
                             + f"\n\n[Truncated: tool output exceeded {MAX_TOOL_FEEDBACK_CHARS} chars. "
                             "Request the remaining part in a follow-up call.]"
                         )
-                                                                                                
-                                                                                               
-                                                                                                 
                     if "todo" in self.allowed_tools and not todo_nudged:
                         if executed_tool_count >= TODO_NUDGE_AFTER_TOOLS and not self.tools.todos:
                             todo_nudged = True
@@ -1236,7 +1234,7 @@ class DeepCLIApp:
                                 "\n\n[СИСТЕМА]: в списке задач нет ни одной активной. Отметь "
                                 "выполненные через complete и переведи текущую в active."
                             )
-                    interactive_prompt_detected = None
+                    interactive_prompt_detected = None
                     for output in tool_outputs:
                         if "WAITING_FOR_INPUT" in output:
                             try:
@@ -1256,8 +1254,19 @@ class DeepCLIApp:
                         accumulated_output = interactive_prompt_detected.get(
                             "accumulated_output", ""
                         )
+                        task_state = build_agent_task_state(
+                            original_goal,
+                            self.tools.todos,
+                            pending_verification=pending_verification,
+                            strategy_change_required=strategy_change_required,
+                            include_goal=(
+                                loop_count % TASK_GOAL_REMINDER_INTERVAL == 0
+                            ),
+                        )
                         current_prompt = (
-                            "[INTERACTIVE TERMINAL PROMPT DETECTED]\n"
+                            task_state
+                            + ("\n" if task_state else "")
+                            + "[INTERACTIVE TERMINAL PROMPT DETECTED]\n"
                             f"Программа ожидает ввода в терминал (session_id=\"{session_id}\").\n"
                             "Текущий вывод терминала:\n"
                             "---\n"
@@ -1284,26 +1293,48 @@ class DeepCLIApp:
                         + "[РЕЗУЛЬТАТЫ ИНСТРУМЕНТОВ]\n"
                         + feedback
                         + "\n[КОНЕЦ РЕЗУЛЬТАТОВ]\n\n"
-                        "Продолжай исходную задачу. Если она подтверждённо выполнена — "
-                        "дай финальный ответ; иначе выбери следующий проверяемый шаг."
+                        "Продолжай исходную задачу. Если она подтверждённо выполнена — дай финальный ответ с кратким итогом. "
+                        "Если задача НЕ завершена — СРАЗУ вызови следующий инструмент через ```tool_call в этом же сообщении. "
+                        "Не пиши промежуточные обещания («сейчас проверю», «установлю») без одновременного вызова инструмента."
                     )
                     continue
             else:
-                if pending_verification and verification_nudges < 2:
+                has_unfinished_todos = any(
+                    item.get("status") in ("active", "pending")
+                    for item in self.tools.todos
+                )
+                action_promise_re = re.compile(
+                    r"(?:(?:сейчас|сначала|дальше|теперь|затем)\s+(?:проверю|установлю|попробую|выполню|сделаю|запущу|подключусь|посмотрю)|"
+                    r"проверю\s+(?:доступные|наличие|работу|файлы|порты|версию|команду|менеджеры|пакеты)|"
+                    r"установлю\s+(?:через|с\s+помощью|пакет)|"
+                    r"попробую\s+(?:подключиться|запустить|выполнить|установить)|"
+                    r"(?:перехожу|приступаю)\s+к|"
+                    r"следующим\s+(?:шагом|действием)|"
+                    r"(?:i\s+will|let\s+me|going\s+to)\s+(?:now\s+)?(?:check|install|run|try|execute|verify|test))",
+                    re.IGNORECASE,
+                )
+                has_action_promise = bool(action_promise_re.search(final_answer))
+
+                if (pending_verification or has_unfinished_todos or has_action_promise) and verification_nudges < 3:
                     verification_nudges += 1
+                    if has_action_promise:
+                        nudge_reason = "Ты написал, что выполнишь действие, но не вызвал инструмент в блоке ```tool_call. СРАЗУ вызови нужный инструмент."
+                    elif pending_verification:
+                        nudge_reason = "Ты попытался завершить задачу до проверки изменённого артефакта. Следующим сообщением вызови релевантный инструмент проверки."
+                    else:
+                        nudge_reason = "В списке задач остались незавершённые шаги. Вызови следующий инструмент для продолжения."
+
                     current_prompt = (
                         build_agent_task_state(
                             original_goal,
                             self.tools.todos,
-                            pending_verification=True,
+                            pending_verification=pending_verification,
                             strategy_change_required=strategy_change_required,
                             include_goal=(
                                 loop_count % TASK_GOAL_REMINDER_INTERVAL == 0
                             ),
                         )
-                        + "\nТы попытался завершить задачу до проверки изменённого "
-                        "артефакта. Следующим сообщением вызови релевантный инструмент "
-                        "проверки. Не повторяй неподтверждённый финальный ответ."
+                        + f"\n{nudge_reason} Не повторяй неподтверждённый финальный ответ и не пиши обещания без вызова ```tool_call."
                     )
                     continue
                 break

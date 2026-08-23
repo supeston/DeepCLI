@@ -150,13 +150,62 @@ TOOL_DESCRIPTIONS = {
   Удаляет конкретную запись из Журнала буфера обмена Windows.""",
     "clear_clipboard_history": """- clear_clipboard_history: {}
   Очищает историю системного буфера обмена Windows (Win + V) по запросу пользователя.""",
+    "vds_deploy": """- vds_deploy: мощный автономный инструмент для прямого управления, автоматизации и деплоя на удалённые VDS/VPS серверы по SSH/SFTP (без зависаний терминала OpenSSH на Windows).
+  Поддерживает постоянный пул сессий (вызовы исполняются за доли секунды), аутентификацию по паролю и SSH-ключам, профили серверов и переменные .env (VDS_HOST, VDS_USER, VDS_PASSWORD, VDS_PORT, VDS_KEY_PATH).
+
+  Действия (action):
+  • test_connection — проверка связи, замер задержки пинга и сбор базовой информации об ОС сервера:
+    {"action":"test_connection", "host":"1.2.3.4", "username":"root", "password":"..."}
+  • exec — выполнение bash-команды на удалённом сервере с получением stdout, stderr и exit code:
+    {"action":"exec", "command":"apt update && apt install -y nginx", "cwd":"/opt", "sudo":false}
+  • script — выполнение многострочного bash-скрипта на сервере (загружается и выполняется с bash -e):
+    {"action":"script", "script": \"\"\"
+#!/bin/bash
+set -e
+git clone https://github.com/example/repo.git /opt/app
+cd /opt/app && python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+\"\"\"}
+  • upload — скоростная синхронизация файла или целой папки проекта через SFTP с рекурсивным mkdir -p и умной фильтрацией мусора (.git, __pycache__, .venv, node_modules):
+    {"action":"upload", "local_path":".", "remote_path":"/opt/myapp"}
+  • download — скачивание удалённого файла или папки на локальную машину:
+    {"action":"download", "remote_path":"/var/log/nginx/access.log", "local_path":"./logs/remote_access.log"}
+  • write_file — прямая запись конфигов (systemd, nginx, .env, docker-compose) на удалённый сервер:
+    {"action":"write_file", "path":"/etc/systemd/system/myapp.service", "content": \"\"\"
+[Unit]
+Description=My Application
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/opt/myapp
+ExecStart=/opt/myapp/.venv/bin/python main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+\"\"\", "mode":"0o644"}
+  • edit_file — точечное редактирование удалённого файла на сервере без перезаливки и без sed (заменяет target на replacement):
+    {"action":"edit_file", "path":"/opt/myapp/bot.py", "target": \"\"\"port = null\"\"\", "replacement": \"\"\"port = None\"\"\"}
+  • read_file — чтение файла с удалённого сервера (с номерами строк):
+    {"action":"read_file", "path":"/etc/nginx/nginx.conf", "start_line":1, "end_line":100}
+  • service — управление службами systemd (start, stop, restart, reload, status, enable, disable, logs):
+    {"action":"service", "service":"nginx", "operation":"restart"}
+  • docker — управление Docker и Docker Compose (ps, up, down, restart, logs, build, prune):
+    {"action":"docker", "operation":"up", "compose_file":"/opt/app/docker-compose.yml"}
+  • quick_deploy — комплексный деплой в один шаг (загрузка папки + выполнение команд сборки + запуск/перезапуск сервиса или docker):
+    {"action":"quick_deploy", "local_path":".", "remote_path":"/opt/myapp", "build_commands":["python3 -m pip install -r requirements.txt"], "service":"myapp", "healthcheck_url":"http://localhost:8000/health"}
+  • sys_info — детальная диагностика ресурсов сервера (ОС, ядра ЦП, загрузка, RAM free, диск df, открытые порты ss):
+    {"action":"sys_info"}
+  • save_profile / list_profiles / remove_profile — сохранение профиля VDS в .deepx/vds_profiles.json, чтобы не указывать реквизиты каждый раз:
+    {"action":"save_profile", "name":"prod", "host":"1.2.3.4", "username":"root", "password":"..."}""",
 }
 
 COMMON_FILE_TOOLS = {
     "read_file", "write_file", "edit_file", "list_dir", "file_info", "project_memory",
     "todo", "inspect_media", "read_clipboard", "write_clipboard",
     "get_clipboard_history", "get_clipboard_item", "set_clipboard", "delete_clipboard_item", "clear_clipboard_history",
-    "send_input", "kill_cmd",
+    "send_input", "kill_cmd", "vds_deploy",
 }
 
 STYLE_CONFIGS = {
@@ -166,7 +215,7 @@ STYLE_CONFIGS = {
         "tools": COMMON_FILE_TOOLS | {
             "run_cmd", "run_python", "run_background_cmd", "task_status", "task_log",
             "sys_info", "web_search", "fetch_url", "browser_action",
-            "render_plan", "zip_pack", "unzip_pack",
+            "render_plan", "zip_pack", "unzip_pack", "vds_deploy",
         },
         "instructions": """ПРОФЕССИОНАЛЬНАЯ РОЛЬ: ИНЖЕНЕР-ПРОГРАММИСТ
 Ты — опытный инженер-программист и разработчик систем (DEEPX Agent).

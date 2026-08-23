@@ -131,10 +131,10 @@ class AdaptiveStreamWriter:
             chars_in_queue = self._buf_len
             chars_left = chars_in_text + chars_in_queue
 
-            # Fast bulk mode: buffer is large, dump a whole chunk at once
-            if chars_left > STREAM_ADAPTIVE_THRESHOLD:
-                end = min(index + STREAM_BULK_CHUNK, total)
-                # Don't split ANSI sequences in the middle
+            # When significantly behind, stream in small fast batches (4-6 chars) with micro-delay
+            if chars_left > 100:
+                chunk_size = min(6, total - index)
+                end = index + chunk_size
                 while end < total and text[end] == "\x1b":
                     m = ANSI_ESCAPE_RE.match(text, end)
                     if m:
@@ -144,10 +144,25 @@ class AdaptiveStreamWriter:
                 sys.stdout.write(text[index:end])
                 sys.stdout.flush()
                 index = end
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.001)
                 continue
 
-            # Slow typewriter mode: we're almost caught up, animate nicely
+            if chars_left > 25:
+                chunk_size = min(2, total - index)
+                end = index + chunk_size
+                while end < total and text[end] == "\x1b":
+                    m = ANSI_ESCAPE_RE.match(text, end)
+                    if m:
+                        end = m.end()
+                    else:
+                        break
+                sys.stdout.write(text[index:end])
+                sys.stdout.flush()
+                index = end
+                await asyncio.sleep(STREAM_CHAR_DELAY_MAX / 2)
+                continue
+
+            # Smooth typewriter mode: we're caught up
             char = text[index]
             sys.stdout.write(char)
             sys.stdout.flush()
@@ -163,11 +178,7 @@ class AdaptiveStreamWriter:
         return ""
 
 async def write_streaming_chars(text: str, remaining: int = 0):
-    """Legacy wrapper — outputs text adaptively in a single call.
-
-    *remaining* hints how many more chars will follow.  Used by the
-    post-stream flush where no AdaptiveStreamWriter exists.
-    """
+    """Outputs text adaptively with smooth progressive pacing."""
     total = len(text)
     index = 0
 
@@ -181,8 +192,9 @@ async def write_streaming_chars(text: str, remaining: int = 0):
                 continue
 
         chars_left = total - index + remaining
-        if chars_left > STREAM_ADAPTIVE_THRESHOLD:
-            end = min(index + STREAM_BULK_CHUNK, total)
+        if chars_left > 100:
+            chunk_size = min(6, total - index)
+            end = index + chunk_size
             while end < total and text[end] == "\x1b":
                 m = ANSI_ESCAPE_RE.match(text, end)
                 if m:
@@ -192,7 +204,22 @@ async def write_streaming_chars(text: str, remaining: int = 0):
             sys.stdout.write(text[index:end])
             sys.stdout.flush()
             index = end
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.001)
+            continue
+
+        if chars_left > 25:
+            chunk_size = min(2, total - index)
+            end = index + chunk_size
+            while end < total and text[end] == "\x1b":
+                m = ANSI_ESCAPE_RE.match(text, end)
+                if m:
+                    end = m.end()
+                else:
+                    break
+            sys.stdout.write(text[index:end])
+            sys.stdout.flush()
+            index = end
+            await asyncio.sleep(STREAM_CHAR_DELAY_MAX / 2)
             continue
 
         char = text[index]
@@ -206,3 +233,4 @@ async def write_streaming_chars(text: str, remaining: int = 0):
         elif char == "\n":
             delay += STREAM_PUNCTUATION_DELAY / 2
         await asyncio.sleep(delay)
+

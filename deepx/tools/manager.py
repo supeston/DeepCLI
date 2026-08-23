@@ -54,6 +54,7 @@ from .todo import TodoToolsMixin
 from .project import ProjectToolsMixin
 from .media_inspector import MediaInspectorMixin
 from .clipboard import ClipboardMixin
+from .vds import VDSToolsMixin
 
 class AgentTools(
     SystemToolsMixin,
@@ -65,6 +66,7 @@ class AgentTools(
     ProjectToolsMixin,
     MediaInspectorMixin,
     ClipboardMixin,
+    VDSToolsMixin,
 ):
     def __init__(
         self,
@@ -337,6 +339,8 @@ class AgentTools(
             )
         elif tool_name == "clear_clipboard_history":
             return await asyncio.to_thread(self.clear_clipboard_history)
+        elif tool_name == "vds_deploy":
+            return await asyncio.to_thread(self.vds_deploy, **args)
 
         else:
             return f"[Error: Unknown tool '{tool_name}']"
