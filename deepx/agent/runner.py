@@ -1304,20 +1304,34 @@ class DeepCLIApp:
                     for item in self.tools.todos
                 )
                 action_promise_re = re.compile(
-                    r"(?:(?:сейчас|сначала|дальше|теперь|затем)\s+(?:проверю|установлю|попробую|выполню|сделаю|запущу|подключусь|посмотрю)|"
+                    r"(?:(?:сейчас|сначала|дальше|теперь|затем|пока|пробуем|пробую|попробуем|попробую|тестируем|тестирую|проверяем|проверяю|пытаемся|пытаюсь|отправляю|отправляем)\s+(?:проверю|проверить|установлю|установить|попробую|попробовать|выполню|выполнить|сделаю|сделать|запущу|запустить|подключусь|подключиться|посмотрю|посмотреть|отправлю|отправить|перейду|перейти|протестирую|протестировать|переполнение)|"
                     r"проверю\s+(?:доступные|наличие|работу|файлы|порты|версию|команду|менеджеры|пакеты)|"
+                    r"пробуем\s+(?:переполнение|инъекци|запрос|отправить|проверить|тестировать|подобрать|найти)|"
+                    r"пробую\s+(?:переполнение|инъекци|запрос|отправить|проверить|тестировать|подобрать|найти)|"
+                    r"тестирую\s+(?:инъекци|запрос|эндпоинт|авторизаци|логин|пароль|токен|ошибк)|"
+                    r"тестируем\s+(?:инъекци|запрос|эндпоинт|авторизаци|логин|пароль|токен|ошибк)|"
+                    r"отправляю\s+(?:запрос|payload|данные|пакет|параметр)|"
+                    r"отправляем\s+(?:запрос|payload|данные|пакет|параметр)|"
                     r"установлю\s+(?:через|с\s+помощью|пакет)|"
                     r"попробую\s+(?:подключиться|запустить|выполнить|установить)|"
                     r"(?:перехожу|приступаю)\s+к|"
                     r"следующим\s+(?:шагом|действием)|"
-                    r"(?:i\s+will|let\s+me|going\s+to)\s+(?:now\s+)?(?:check|install|run|try|execute|verify|test))",
+                    r"(?:i\s+will|let\s+me|going\s+to|testing|trying|sending)\s+(?:now\s+)?(?:check|install|run|try|execute|verify|test|send|navigate))",
                     re.IGNORECASE,
                 )
                 has_action_promise = bool(action_promise_re.search(final_answer))
+                
+                tool_call_marker_re = re.compile(
+                    r"(?:```\s*(?:tool_call|tool_calls|tools|tool|json)|<(?:tool_call|function_call|invoke)|(?:^|\n)\s*tool_call\s*\n\s*\{)",
+                    re.IGNORECASE
+                )
+                has_unparsed_tool_markup = bool(tool_call_marker_re.search(final_answer))
 
-                if (pending_verification or has_unfinished_todos or has_action_promise) and verification_nudges < 3:
+                if (pending_verification or has_unfinished_todos or has_action_promise or has_unparsed_tool_markup) and verification_nudges < 3:
                     verification_nudges += 1
-                    if has_action_promise:
+                    if has_unparsed_tool_markup:
+                        nudge_reason = "Обнаружена попытка вызова инструмента, но синтаксис был некорректен. СРАЗУ вызови нужный инструмент в правильном формате ```tool_call."
+                    elif has_action_promise:
                         nudge_reason = "Ты написал, что выполнишь действие, но не вызвал инструмент в блоке ```tool_call. СРАЗУ вызови нужный инструмент."
                     elif pending_verification:
                         nudge_reason = "Ты попытался завершить задачу до проверки изменённого артефакта. Следующим сообщением вызови релевантный инструмент проверки."

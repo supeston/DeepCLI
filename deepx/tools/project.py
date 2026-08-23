@@ -82,9 +82,12 @@ class ProjectToolsMixin:
             file.write("\n")
         os.replace(temp_path, self.project_memory_file)
 
+    @staticmethod
     def _memory_list(value, name: str) -> list:
         if value is None:
             return []
+        if isinstance(value, str):
+            value = [value]
         if not isinstance(value, list):
             raise ValueError(f"{name} must be a list")
         return [str(item).strip() for item in value if str(item).strip()]

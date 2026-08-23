@@ -210,17 +210,53 @@ class BrowserToolsMixin:
         return json.dumps(state, ensure_ascii=False, indent=2)
 
     async def browser_action(self, action: str, args: dict) -> str:
-                                                                                  
         await self.init_browser()
         args = args or {}
-        action = (action or "snapshot").lower()
+        raw_action = str(action or args.get("action") or "snapshot").lower().strip().replace("-", "_")
+
+        # Normalize action aliases
+        _ACTION_ALIASES = {
+            "goto": "navigate",
+            "open": "navigate",
+            "visit": "navigate",
+            "load": "navigate",
+            "browse": "navigate",
+            "eval": "evaluate",
+            "js": "evaluate",
+            "execute": "evaluate",
+            "run": "evaluate",
+            "script": "evaluate",
+            "input": "fill",
+            "type": "fill",
+            "write": "fill",
+            "set_text": "fill",
+            "press_key": "press",
+            "keypress": "press",
+            "key": "press",
+            "page_source": "extract_html",
+            "html": "extract_html",
+            "get_html": "extract_html",
+            "source": "extract_html",
+            "text": "extract_text",
+            "get_text": "extract_text",
+            "tabs": "list_tabs",
+            "get_tabs": "list_tabs",
+            "newtab": "new_tab",
+            "open_tab": "new_tab",
+            "switchtab": "switch_tab",
+            "closetab": "close_tab",
+            "observe": "snapshot",
+            "look": "snapshot",
+        }
+        action = _ACTION_ALIASES.get(raw_action, raw_action)
+
         try:
             if action in ("snapshot", "observe"):
                 return await self.browser_snapshot(
                     int(args.get("max_elements", 120)), int(args.get("max_text", 12000))
                 )
             if action in ("navigate", "open"):
-                url = str(args.get("url", "")).strip()
+                url = str(args.get("url") or args.get("link") or args.get("target") or args.get("path") or "").strip().strip("'\"`")
                 if not url:
                     raise ValueError("url is required")
                 if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", url):
@@ -237,9 +273,17 @@ class BrowserToolsMixin:
                     self._configure_browser_page(self.page)
             elif action in ("fill", "type"):
                 loc = await self._browser_locator(args)
-                value = str(args.get("value", args.get("text", "")))
+                value = str(
+                    args.get("value")
+                    if args.get("value") is not None
+                    else args.get("text")
+                    if args.get("text") is not None
+                    else args.get("content")
+                    if args.get("content") is not None
+                    else args.get("input", "")
+                )
                 await loc.scroll_into_view_if_needed()
-                if action == "type" and args.get("append"):
+                if raw_action == "type" and args.get("append"):
                     await loc.type(value, delay=int(args.get("delay", 0)))
                 else:
                     await loc.fill(value)
@@ -247,10 +291,11 @@ class BrowserToolsMixin:
                 targeted = any(args.get(k) for k in (
                     "ref", "selector", "role", "name", "label", "placeholder", "target"
                 ))
+                key = str(args.get("key") or args.get("value") or "Enter")
                 if targeted:
-                    await (await self._browser_locator(args)).press(args.get("key", "Enter"))
+                    await (await self._browser_locator(args)).press(key)
                 else:
-                    await self.page.keyboard.press(args.get("key", "Enter"))
+                    await self.page.keyboard.press(key)
             elif action == "select":
                 loc = await self._browser_locator(args)
                 if args.get("option_label") is not None:
@@ -267,9 +312,10 @@ class BrowserToolsMixin:
                     direction = -1 if args.get("direction") == "up" else 1
                     await self.page.mouse.wheel(0, int(args.get("amount", 700)) * direction)
             elif action == "wait":
-                timeout = min(int(args.get("timeout", 10000)), 60000)
-                if args.get("text"):
-                    await self.page.get_by_text(args["text"], exact=bool(args.get("exact"))).first.wait_for(
+                timeout = min(int(args.get("timeout", args.get("delay", args.get("ms", 10000)))), 60000)
+                wait_text = args.get("text") or args.get("content")
+                if wait_text:
+                    await self.page.get_by_text(wait_text, exact=bool(args.get("exact"))).first.wait_for(
                         state=args.get("state", "visible"), timeout=timeout
                     )
                 elif args.get("selector"):
@@ -287,8 +333,9 @@ class BrowserToolsMixin:
             elif action == "new_tab":
                 self.page = await self.browser_context.new_page()
                 self._configure_browser_page(self.page)
-                if args.get("url"):
-                    await self.page.goto(args["url"], wait_until="domcontentloaded")
+                tab_url = args.get("url") or args.get("link")
+                if tab_url:
+                    await self.page.goto(str(tab_url).strip().strip("'\"`"), wait_until="domcontentloaded")
             elif action == "switch_tab":
                 self.page = self.browser_context.pages[int(args.get("index", -1))]
                 await self.page.bring_to_front()
@@ -303,7 +350,7 @@ class BrowserToolsMixin:
                     for i, p in enumerate(self.browser_context.pages)
                 ], ensure_ascii=False, indent=2)
             elif action == "upload":
-                files = args.get("files", args.get("path", []))
+                files = args.get("files", args.get("path", args.get("file", [])))
                 if isinstance(files, str):
                     files = [files]
                 await (await self._browser_locator(args)).set_input_files([
@@ -335,7 +382,8 @@ class BrowserToolsMixin:
                 )
                 return html[:int(args.get("max_text", 30000))]
             elif action == "evaluate":
-                result = await self.page.evaluate(args.get("script", ""))
+                script = args.get("script") or args.get("code") or args.get("expression") or args.get("content") or args.get("command") or ""
+                result = await self.page.evaluate(script)
                 return json.dumps(result, ensure_ascii=False, default=str)[:30000]
             else:
                 return f"[Error: Unknown browser action '{action}']"

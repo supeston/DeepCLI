@@ -42,7 +42,7 @@ from deepx.tools.funstat_osint import FunstatOSINTTool
 
 from deepx.core.constants import *
 from deepx.core.config import *
-from deepx.parser.tool_parser import normalize_tool_args
+from deepx.parser.tool_parser import normalize_tool_args, canonicalize_tool_name
 from deepx.ui.markup import *
 from deepx.ui.terminal import console
 from .system import SystemToolsMixin
@@ -210,43 +210,49 @@ class AgentTools(
 
         return None
     async def execute_tool(self, tool_name: str, args: dict, allowed_tools=None) -> str:
-                                            
+        tool_name = canonicalize_tool_name(tool_name)
         args = normalize_tool_args(args or {})
-        if allowed_tools is not None and tool_name not in allowed_tools:
+        if allowed_tools is not None and tool_name not in allowed_tools and canonicalize_tool_name(tool_name) not in allowed_tools:
             return f"[Error: Tool '{tool_name}' is unavailable in the active agent style]"
         if tool_name == "run_cmd":
+            command = args.get("command") or args.get("cmd") or args.get("shell") or args.get("code") or ""
             return await asyncio.to_thread(
-                self.run_cmd, args.get("command", ""), args.get("inputs", None)
+                self.run_cmd, command, args.get("inputs", None)
             )
         elif tool_name == "send_input":
+            session_id = str(args.get("session_id") or args.get("id") or "")
+            text_val = str(args.get("text") if args.get("text") is not None else args.get("input") if args.get("input") is not None else args.get("content", ""))
             return await asyncio.to_thread(
                 self.send_input,
-                args.get("session_id", args.get("id", "")),
-                args.get("text", args.get("input", "")),
+                session_id,
+                text_val,
             )
         elif tool_name == "kill_cmd":
             return await asyncio.to_thread(
-                self.kill_cmd, args.get("session_id", args.get("id", ""))
+                self.kill_cmd, str(args.get("session_id") or args.get("id") or "")
             )
         elif tool_name == "run_python":
-            return await asyncio.to_thread(self.run_python, args.get("code", ""))
+            code = args.get("code") or args.get("script") or args.get("python_code") or args.get("content") or ""
+            return await asyncio.to_thread(self.run_python, code)
         elif tool_name == "run_background_cmd":
+            command = args.get("command") or args.get("cmd") or ""
             return await self.run_background_cmd(
-                args.get("command", ""), args.get("inputs", None)
+                command, args.get("inputs", None)
             )
         elif tool_name == "task_status":
-            return await self.task_status(args.get("id", args.get("task_id", "")))
+            return await self.task_status(str(args.get("id") or args.get("task_id") or ""))
         elif tool_name == "task_log":
             return await self.task_log(
-                args.get("id", args.get("task_id", "")),
+                str(args.get("id") or args.get("task_id") or ""),
                 args.get("tail_lines", 200),
             )
         elif tool_name == "todo":
             return self.todo(args.get("action", "list"), args)
         elif tool_name == "web_search":
+            query = args.get("query") or args.get("q") or args.get("search_query") or args.get("text") or ""
             return await asyncio.to_thread(
                 self.web_search,
-                args.get("query", ""),
+                query,
                 args.get("max_results", 10),
                 args.get("site", ""),
                 args.get("region", "wt-wt"),
@@ -267,33 +273,42 @@ class AgentTools(
                 options=args.get("options", {}),
             )
         elif tool_name == "fetch_url":
+            url = str(args.get("url") or args.get("link") or args.get("target") or "")
             return await asyncio.to_thread(
-                self.fetch_url, args.get("url", ""), args.get("max_chars", 6000)
+                self.fetch_url, url, args.get("max_chars", 6000)
             )
         elif tool_name == "read_file":
+            path = str(args.get("path") or args.get("file") or args.get("filename") or "")
             return await asyncio.to_thread(
                 self.read_file,
-                args.get("path", ""),
+                path,
                 args.get("start_line", 1),
                 args.get("end_line", 500),
             )
         elif tool_name == "write_file":
+            path = str(args.get("path") or args.get("file") or args.get("filename") or "")
+            content = str(args.get("content") if args.get("content") is not None else args.get("code") if args.get("code") is not None else args.get("text", ""))
             return await asyncio.to_thread(
-                self.write_file, args.get("path", ""), args.get("content", "")
+                self.write_file, path, content
             )
         elif tool_name == "edit_file":
+            path = str(args.get("path") or args.get("file") or args.get("filename") or "")
+            target = str(args.get("target") if args.get("target") is not None else "")
+            replacement = str(args.get("replacement") if args.get("replacement") is not None else "")
             return await asyncio.to_thread(
                 self.edit_file,
-                args.get("path", ""),
-                args.get("target", ""),
-                args.get("replacement", ""),
+                path,
+                target,
+                replacement,
                 args.get("start_line"),
                 args.get("end_line"),
             )
         elif tool_name == "list_dir":
-            return await asyncio.to_thread(self.list_dir, args.get("path", "."))
+            path = str(args.get("path") or args.get("dir") or args.get("directory") or ".")
+            return await asyncio.to_thread(self.list_dir, path)
         elif tool_name == "file_info":
-            return self.file_info(args.get("path", ""))
+            path = str(args.get("path") or args.get("file") or args.get("filename") or "")
+            return self.file_info(path)
         elif tool_name == "project_memory":
             return self.project_memory(args.get("action", "get"), args)
         elif tool_name == "sys_info":
