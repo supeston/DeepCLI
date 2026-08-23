@@ -823,6 +823,19 @@ class DeepAPI:
             return {"think": "", "answer": ""}
 
     async def send_message(self, prompt: str, stream: bool = False):
+        # 1. Snapshot previous response state before sending so we NEVER re-read it
+        old_state = ""
+        try:
+            last_el_init = self.page.locator(".ds-markdown, [class*='think']").last
+            if await last_el_init.count() > 0:
+                old_cont = last_el_init.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+                if await old_cont.count() == 0:
+                    old_cont = last_el_init.locator("xpath=../..")
+                init_data = await self.extract_response_data(old_cont, is_generating=False)
+                old_state = (init_data.get("think", "") + "|||" + init_data.get("answer", "")).strip()
+        except Exception:
+            old_state = ""
+
         try:
             await self.page.evaluate("""
                 document.querySelectorAll(".ds-markdown, [class*='think']").forEach(el => {
@@ -834,7 +847,29 @@ class DeepAPI:
 
         chat_input = self.page.locator("textarea, div[contenteditable='true']").first
         await chat_input.wait_for(state="visible", timeout=15000)
+        await chat_input.focus()
         await chat_input.fill(prompt)
+
+        # Ensure input event is dispatched to trigger React/Vue reactive state
+        try:
+            await self.page.evaluate("""
+                (promptText) => {
+                    const input = document.querySelector("textarea, div[contenteditable='true']");
+                    if (input) {
+                        if (input.tagName.toLowerCase() === 'textarea') {
+                            input.value = promptText;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            input.dispatchEvent(new Event('change', { bubbles: true }));
+                        } else {
+                            input.innerText = promptText;
+                            input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }));
+                        }
+                    }
+                }
+            """, prompt)
+        except Exception:
+            pass
+
         await asyncio.sleep(0.15)
 
         # Click send button if visible or press Enter
@@ -869,7 +904,21 @@ class DeepAPI:
             if await new_el_check.count() > 0:
                 break
 
-            # If input still has text after 3 seconds, retry clicking send
+            # Check if text in the last message changed from old_state
+            try:
+                last_el_check = self.page.locator(".ds-markdown, [class*='think']").last
+                if await last_el_check.count() > 0:
+                    curr_c = last_el_check.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+                    if await curr_c.count() == 0:
+                        curr_c = last_el_check.locator("xpath=../..")
+                    cur_d = await self.extract_response_data(curr_c, is_generating=True)
+                    cur_s = (cur_d.get("think", "") + "|||" + cur_d.get("answer", "")).strip()
+                    if cur_s and cur_s != old_state:
+                        break
+            except Exception:
+                pass
+
+            # If input still has text after 2.5 seconds, retry clicking send
             elapsed = asyncio.get_running_loop().time() - start_wait
             if elapsed > 2.5 and int(elapsed * 2) % 4 == 0:
                 try:
@@ -900,31 +949,34 @@ class DeepAPI:
                 if await target_container.count() == 0:
                     target_container = last_el.locator("xpath=../..")
 
-        for _ in range(120):
-            if await self.is_generating():
-                break
-            if target_container and await target_container.count() > 0:
-                data = await self.extract_response_data(target_container, is_generating=False)
-                if data["think"] or data["answer"]:
-                    break
-            await asyncio.sleep(0.05)
-
         if not stream:
-            last_text_state = ""
+            last_text_state = old_state
             loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
+            has_seen_new_content = False
+            start_wait_stream = loop.time()
+
             while True:
                 generating = await self.is_generating()
                 data = await self.extract_response_data(target_container, is_generating=generating)
-                curr_state = data["think"] + "|||" + data["answer"]
+                curr_state = (data["think"] + "|||" + data["answer"]).strip()
                 now = loop.time()
-                if curr_state != last_text_state:
+
+                if curr_state and curr_state != old_state and curr_state != last_text_state:
+                    has_seen_new_content = True
                     last_text_state = curr_state
                     last_change_at = now
 
-                # A stale/false-positive Stop control must not prevent the local
-                # agent from executing an already complete tool call forever.
+                if not has_seen_new_content:
+                    if generating:
+                        await asyncio.sleep(0.05)
+                        continue
+                    if now - start_wait_stream < 4.0:
+                        await asyncio.sleep(0.05)
+                        continue
+                    break
+
                 if (
                     generating
                     and _has_complete_tool_call(data["answer"])
@@ -938,12 +990,7 @@ class DeepAPI:
                     not_generating_since = now
 
                 if not generating and not_generating_since is not None:
-                    if data["answer"]:
-                        grace_seconds = 1.25
-                    elif data["think"]:
-                        grace_seconds = 8.0
-                    else:
-                        grace_seconds = 4.0
+                    grace_seconds = 1.25 if data["answer"] else 8.0 if data["think"] else 4.0
                     if (
                         now - last_change_at >= grace_seconds
                         and now - not_generating_since >= grace_seconds
@@ -955,8 +1002,8 @@ class DeepAPI:
                         )
                         confirm_state = (
                             confirm_data["think"] + "|||" + confirm_data["answer"]
-                        )
-                        if confirm_generating or confirm_state != curr_state:
+                        ).strip()
+                        if confirm_generating or (confirm_state != curr_state and confirm_state != old_state):
                             last_text_state = confirm_state
                             last_change_at = loop.time()
                             not_generating_since = (
@@ -967,27 +1014,42 @@ class DeepAPI:
                 await asyncio.sleep(0.05)
 
             data = await self.extract_response_data(target_container, is_generating=False)
-            # Reasoning is telemetry-only; non-streaming consumers also get
-            # the answer channel and can never execute or display reasoning.
+            curr_s = (data["think"] + "|||" + data["answer"]).strip()
+            if curr_s == old_state:
+                return ""
             return data["answer"]
 
         async def generator():
-            last_text_state = ""
+            last_text_state = old_state
             loop = asyncio.get_running_loop()
             last_change_at = loop.time()
             not_generating_since = None
+            has_seen_new_content = False
+            start_wait_stream = loop.time()
 
             while True:
                 generating = await self.is_generating()
                 data = await self.extract_response_data(target_container, is_generating=generating)
                 think_str = data["think"]
                 answer_str = data["answer"]
+                curr_state = (think_str + "|||" + answer_str).strip()
 
-                curr_state = think_str + "|||" + answer_str
                 now = loop.time()
-                if curr_state != last_text_state:
+                if curr_state and curr_state != old_state and curr_state != last_text_state:
+                    has_seen_new_content = True
                     last_text_state = curr_state
                     last_change_at = now
+
+                # Do NOT yield stale previous turn output!
+                if not has_seen_new_content:
+                    if generating:
+                        await asyncio.sleep(0.05)
+                        continue
+                    if now - start_wait_stream < 4.0:
+                        await asyncio.sleep(0.05)
+                        continue
+                    # Never yield old state if generation didn't start
+                    break
 
                 complete_tool_call_stalled = (
                     generating
@@ -1006,12 +1068,7 @@ class DeepAPI:
                     break
 
                 if not generating and not_generating_since is not None:
-                    if answer_str:
-                        grace_seconds = 1.25
-                    elif think_str:
-                        grace_seconds = 8.0
-                    else:
-                        grace_seconds = 4.0
+                    grace_seconds = 1.25 if answer_str else 8.0 if think_str else 4.0
                     if (
                         now - last_change_at >= grace_seconds
                         and now - not_generating_since >= grace_seconds
@@ -1021,20 +1078,20 @@ class DeepAPI:
                             target_container,
                             is_generating=confirm_generating,
                         )
-                        yield {
-                            "think": final_data["think"],
-                            "answer": final_data["answer"],
-                        }
                         final_state = (
                             final_data["think"] + "|||" + final_data["answer"]
-                        )
-                        if confirm_generating or final_state != curr_state:
+                        ).strip()
+                        if confirm_generating or (final_state != curr_state and final_state != old_state):
                             last_text_state = final_state
                             last_change_at = loop.time()
                             not_generating_since = (
                                 None if confirm_generating else last_change_at
                             )
                             continue
+                        yield {
+                            "think": final_data["think"],
+                            "answer": final_data["answer"],
+                        }
                         break
 
                 await asyncio.sleep(0.02)
