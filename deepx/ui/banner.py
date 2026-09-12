@@ -52,6 +52,12 @@ DEEPX_ASCII_ART = """\
 ██████╔╝███████╗███████╗██║     ██╔╝ ██╗
 ╚═════╝ ╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝"""
 
+# DeepSeek-V4.1-Flash: 284B total / 13B active params
+# Fast, efficient, economical — rapid response streaming with exceptional
+# accuracy for everyday scripts, debugging, and terminal automation.
+MODEL_NAME    = "DeepSeek-V4.1-Flash"
+MODEL_PARAMS  = "284B / 13B"
+
 BANNER_WIDTH = 100
 
 def render_banner(
@@ -67,21 +73,22 @@ def render_banner(
 
     title = Text(DEEPX_ASCII_ART, style="bold #536DFE", end="")
 
+    model_val  = f"[bold #536DFE]{MODEL_NAME}[/bold #536DFE]"
+    params_val = f"[dim #64748B]{MODEL_PARAMS}[/dim #64748B]"
+    model_line = f"Model: {model_val}  [dim #64748B]({params_val})[/dim #64748B]"
+
     if status_message:
         status_line = f"[bold #F8FAFC]{status_message}[/bold #F8FAFC]"
     else:
-        mode_val = f"[bold #38BDF8]{mode.upper()}[/bold #38BDF8]"
         style_label = STYLE_CONFIGS.get(style, STYLE_CONFIGS["coder"])["label"]
-        style_val = f"[bold #A78BFA]{style_label}[/bold #A78BFA]"
-        think_val = "[bold #38BDF8]ON[/bold #38BDF8]" if think else "[dim #64748B]OFF[/dim #64748B]"
-        if mode == "expert":
-            status_line = f"Mode: {mode_val}  |  Style: {style_val}  |  DeepThink: {think_val}"
-        else:
-            search_val = "[bold #38BDF8]ON[/bold #38BDF8]" if search else "[dim #64748B]OFF[/dim #64748B]"
-            status_line = f"Mode: {mode_val}  |  Style: {style_val}  |  DeepThink: {think_val}  |  Search: {search_val}"
+        style_val  = f"[bold #A78BFA]{style_label}[/bold #A78BFA]"
+        think_val  = "[bold #38BDF8]ON[/bold #38BDF8]" if think else "[dim #64748B]OFF[/dim #64748B]"
+        search_val = "[bold #38BDF8]ON[/bold #38BDF8]" if search else "[dim #64748B]OFF[/dim #64748B]"
+        status_line = f"Style: {style_val}  |  DeepThink: {think_val}  |  Search: {search_val}"
 
     grid.add_row(title)
     grid.add_row(Text(""))
+    grid.add_row(Text.from_markup(model_line))
     grid.add_row(Text.from_markup(status_line))
 
     panel = Panel(
@@ -111,12 +118,12 @@ def print_status(mode: str, style: str, think: bool, search: bool, cwd: str, sta
     grid.add_column(style="bold #536DFE", width=22)
     grid.add_column(style="white")
 
-    grid.add_row("Model Mode:", mode.upper())
+    grid.add_row("Model:", f"{MODEL_NAME}  ({MODEL_PARAMS})")
     grid.add_row("Agent Style:", STYLE_CONFIGS.get(style, STYLE_CONFIGS["coder"])["label"])
     grid.add_row("DeepThink Engine:", "Enabled" if think else "Disabled")
-    if mode != "expert":
-        grid.add_row("Smart Web Search:", "Enabled" if search else "Disabled")
+    grid.add_row("Smart Web Search:", "Enabled" if search else "Disabled")
     grid.add_row("Working Directory:", cwd)
     grid.add_row("Session State:", state_file)
 
     console.print(Panel(grid, title="SESSION STATUS", border_style="#536DFE"))
+
