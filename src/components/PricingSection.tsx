@@ -108,7 +108,7 @@ export const PricingSection: React.FC = () => {
               </div>
             </ScrollReveal>
 
-            {/* DeepSeek-V4-Flash Card */}
+            {/* DeepSeek-V4.1-Flash Card */}
             <ScrollReveal direction="up" delay={350}>
               <div className="deepx-card p-6 sm:p-8 bg-slate-50 border border-slate-200 hover:border-[#536DFE]/40 transition-all">
                 <div className="flex items-center justify-between mb-3">
@@ -116,7 +116,7 @@ export const PricingSection: React.FC = () => {
                     <div className="w-8 h-8 rounded-lg bg-[#38BDF8]/10 text-[#38BDF8] flex items-center justify-center">
                       <Zap className="w-4 h-4" />
                     </div>
-                    <span className="font-semibold text-slate-900 text-sm">DeepSeek-V4-Flash</span>
+                    <span className="font-semibold text-slate-900 text-sm">DeepSeek-V4.1-Flash</span>
                   </div>
                   <span className="text-[10px] font-mono font-bold bg-[#38BDF8]/10 text-[#0284C7] px-2 py-0.5 rounded-full">
                     284B / 13B
@@ -127,6 +127,7 @@ export const PricingSection: React.FC = () => {
                 </p>
               </div>
             </ScrollReveal>
+
 
             {/* Zero Friction Card */}
             <ScrollReveal direction="up" delay={450}>
