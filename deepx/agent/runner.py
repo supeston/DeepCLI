@@ -338,6 +338,9 @@ class DeepCLIApp:
                     signal.signal(signal.SIGINT, request_stop)
 
             interrupted = True
+            self.tools.todos = []
+            self.tools._todo_dirty = False
+            self.tools._todo_rendered_signature = None
             loop.set_exception_handler(cancellation_exception_handler)
             sys.stdout.write("\033[0m\r\033[K")
             sys.stdout.flush()
@@ -935,12 +938,6 @@ class DeepCLIApp:
                                                                                       
         if self.is_new_chat:
             system_prompt = build_agent_system_prompt(self.agent_style, self.think, self.tools.cwd)
-            if self.mode == "expert":
-                system_prompt += (
-                    "\n\n[EXPERT MODE]: Never invoke or refer to DeepSeek's internal "
-                    "Search/link-reading feature and never tell the user to switch to "
-                    "Fast/Instant mode. Use only the external tools listed in this prompt."
-                )
             current_prompt = (
                 f"{system_prompt}\n\n[ПОЛЬЗОВАТЕЛЬСКИЙ ЗАПРОС]:\n"
                 f"{user_input}"
@@ -952,8 +949,8 @@ class DeepCLIApp:
             self.is_new_chat = False
 
         await api.set_mode(self.mode)
-        if self.mode == "instant":
-            await api.set_search(self.search)
+        # Search is now always available (no more instant/expert modes)
+        await api.set_search(self.search)
         await api.set_deepthink(self.think)
 
         loop_count = 0
@@ -963,10 +960,9 @@ class DeepCLIApp:
         empty_responses = 0
                                                                                             
                                                               
-        if self.tools.todos and all(
-            item["status"] in ("done", "cancelled") for item in self.tools.todos
-        ):
-            self.tools.todos = []
+        self.tools.todos = []
+        self.tools._todo_dirty = False
+        self.tools._todo_rendered_signature = None
 
         spinner_frames = ["|", "/", "-", "\\"]
 
@@ -1003,6 +999,7 @@ class DeepCLIApp:
             stream_previewed_file_calls = set()
             stream_visual_frame = 0
             stream_file_visual_was_shown = False
+            stream_renderer = StreamingMarkupRenderer()
             stable_stream_text = StableStreamText()
             self._stop_streaming_file_visual()
             stream_writer = AdaptiveStreamWriter()
@@ -1034,29 +1031,15 @@ class DeepCLIApp:
                     stable_source = stable_stream_text.update(
                         get_clean_text(final_answer)
                     )
-                    cleaned = render_terminal_markup(stable_source, final=False)
                     
-                    if (
-                        not stream_file_visual_was_shown
-                        and len(cleaned) > len(printed_answer)
-                    ):
-                        if cleaned.startswith(printed_answer):
-                            new_chars = cleaned[len(printed_answer):]
+                    if not stream_file_visual_was_shown:
+                        new_chars = stream_renderer.update(stable_source)
+                        if new_chars:
                             if not has_printed_text_this_turn:
                                 if loop_count > 1 and did_execute_tool:
                                     sys.stdout.write("\n")
                                 has_printed_text_this_turn = True
                             stream_writer.push(new_chars)
-                            printed_answer = cleaned
-                        elif cleaned.startswith(printed_answer.rstrip("\n")):
-                            base = printed_answer.rstrip("\n")
-                            new_chars = cleaned[len(base):]
-                            if not has_printed_text_this_turn:
-                                if loop_count > 1 and did_execute_tool:
-                                    sys.stdout.write("\n")
-                                has_printed_text_this_turn = True
-                            stream_writer.push(new_chars)
-                            printed_answer = cleaned
 
                     pending_file_calls = self._detect_streaming_file_activities(
                         final_answer
@@ -1064,6 +1047,9 @@ class DeepCLIApp:
                     if pending_file_calls and not stream_file_visual_was_shown:
                         # Finish ordinary stdout before Rich Live starts moving
                         # the terminal cursor.
+                        flush_tail = stream_renderer.finish()
+                        if flush_tail:
+                            stream_writer.push(flush_tail)
                         await stream_writer.finish()
                         await drain_task
 
@@ -1074,11 +1060,11 @@ class DeepCLIApp:
                             max(
                                 0,
                                 2 - (
-                                    len(printed_answer)
-                                    - len(printed_answer.rstrip("\n"))
+                                    len(stream_renderer.rendered_text)
+                                    - len(stream_renderer.rendered_text.rstrip("\n"))
                                 ),
                             )
-                            if printed_answer
+                            if stream_renderer.rendered_text
                             and not stream_file_visual_was_shown
                             else 0
                         ),
@@ -1088,23 +1074,19 @@ class DeepCLIApp:
                         stream_visual_frame += 1
                         stream_file_visual_was_shown = True
 
-                                                                                       
+            if not stream_file_visual_was_shown and final_answer:
+                clean_final = get_clean_text(final_answer)
+                remaining_delta = stream_renderer.update(clean_final)
+                if remaining_delta:
+                    stream_writer.push(remaining_delta)
+                flush_tail = stream_renderer.finish()
+                if flush_tail:
+                    stream_writer.push(flush_tail)
             await stream_writer.finish()
             await drain_task
             self._stop_streaming_file_visual()
-            final_display = render_terminal_markup(get_clean_text(final_answer), final=True)
-            if len(final_display) > len(printed_answer):
-                if final_display.startswith(printed_answer):
-                    await write_streaming_chars(final_display[len(printed_answer):])
-                else:
-                    common_len = 0
-                    for old_char, new_char in zip(printed_answer, final_display):
-                        if old_char != new_char:
-                            break
-                        common_len += 1
-                    await write_streaming_chars(final_display[common_len:])
-                printed_answer = final_display
 
+            printed_answer = stream_renderer.rendered_text
             if printed_answer and not stream_file_visual_was_shown:
                 nl_count = len(printed_answer) - len(printed_answer.rstrip('\n'))
                 if nl_count == 0:

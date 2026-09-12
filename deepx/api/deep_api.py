@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import os
 import re
 from importlib.metadata import PackageNotFoundError, version as package_version
@@ -221,15 +223,23 @@ class DeepAPI:
         if not self.page:
             return None
         for label in labels:
+            # Try role=button first
             btn = self.page.get_by_role("button", name=label, exact=True)
             if await btn.count() > 0:
                 return btn.first
+            # Try role=switch (Radix UI — used for DeepThink/Search in new DeepSeek)
+            sw = self.page.get_by_role("switch", name=label, exact=True)
+            if await sw.count() > 0:
+                return sw.first
             txt = self.page.get_by_text(label, exact=True)
             if await txt.count() > 0:
                 return txt.first
 
         for label in labels:
-            btn = self.page.locator(f"button:has-text('{label}'), div:has-text('{label}')").first
+            btn = self.page.locator(
+                f"button:has-text('{label}'), div:has-text('{label}'),"
+                f" [role='switch']:has-text('{label}')"
+            ).first
             if await btn.count() > 0:
                 return btn
 
@@ -243,14 +253,20 @@ class DeepAPI:
         class_attr = (await el.get_attribute("class")) or ""
         aria_checked = await el.get_attribute("aria-checked")
         aria_pressed = await el.get_attribute("aria-pressed")
+        role = (await el.get_attribute("role")) or ""
 
+        # New DeepSeek interface uses role="switch" (Radix UI) for DeepThink/Search
         if aria_checked == "true" or aria_pressed == "true":
             return True
 
-        active_indicators = ["active", "checked", "selected", "ds-toggle--active", "ds-toggle-button--selected", "ds-button--primary"]
+        active_indicators = [
+            "active", "checked", "selected",
+            "ds-toggle--active", "ds-toggle-button--selected", "ds-button--primary",
+        ]
         if any(indicator in class_attr.lower() for indicator in active_indicators):
             return True
 
+        # Check parent for switch state
         parent = el.locator("xpath=..")
         if await parent.count() > 0:
             parent_class = (await parent.get_attribute("class")) or ""
@@ -262,6 +278,8 @@ class DeepAPI:
                 return True
 
         return False
+
+
 
     async def is_generating(self) -> bool:
         try:
@@ -480,15 +498,9 @@ class DeepAPI:
         return True
 
     async def set_mode(self, mode: str):
-        mode_map = {
-            "instant": ["Быстрый", "Instant"],
-            "expert": ["Эксперт", "Expert"],
-            "vision": ["Распознавание", "Vision"]
-        }
-        key = mode.lower()
-        if key in mode_map:
-            return await self._click_by_labels(mode_map[key])
-        return False
+        # Instant/Expert/Vision режимы удалены в новом интерфейсе DeepSeek.
+        # Метод оставлен для совместимости с runner.py — просто no-op.
+        return True
 
     async def set_search(self, enable: bool):
         labels = ["Умный поиск", "Search"]
@@ -831,7 +843,174 @@ class DeepAPI:
         except Exception:
             return {"think": "", "answer": ""}
 
+    # ─── IMAGE PATH PATTERN ─────────────────────────────────────────────────
+    # Matches [C:\path\to\image.png] or [/path/to/image.jpg] in prompt text.
+    _IMAGE_PATH_RE = re.compile(
+        r"\[([A-Za-z]:[/\\][^\[\]\n]+\.[a-zA-Z]{2,5}|/[^\[\]\n]+\.[a-zA-Z]{2,5})\]"
+    )
+
+    async def _upload_images(self, image_paths: list[str]) -> bool:
+        """Upload images via the file input button or paste from clipboard."""
+        if not image_paths:
+            return True
+        uploaded_any = False
+        for path in image_paths:
+            path = path.strip()
+            if not os.path.isfile(path):
+                continue
+            try:
+                # Method 1: Try file input upload (most reliable)
+                file_input = self.page.locator("input[type='file']").first
+                if await file_input.count() > 0:
+                    try:
+                        await file_input.set_input_files(path, timeout=3000)
+                        await asyncio.sleep(0.5)
+                        uploaded_any = True
+                        continue
+                    except Exception:
+                        pass
+
+                # Method 2: Click the attach/upload button to reveal file input
+                attach_labels = [
+                    "button[aria-label*='attach' i]",
+                    "button[aria-label*='upload' i]",
+                    "button[aria-label*='file' i]",
+                    "button[aria-label*='image' i]",
+                    "button[title*='attach' i]",
+                    "button[title*='upload' i]",
+                    "[role='button'][aria-label*='attach' i]",
+                    "[role='button'][aria-label*='image' i]",
+                    ".ds-icon-paperclip",
+                    "[class*='attach']",
+                    "[class*='upload']",
+                ]
+                for sel in attach_labels:
+                    btn = self.page.locator(sel).first
+                    if await btn.count() > 0 and await btn.is_visible():
+                        try:
+                            await btn.click(timeout=1000)
+                            await asyncio.sleep(0.3)
+                            file_input2 = self.page.locator("input[type='file']").first
+                            if await file_input2.count() > 0:
+                                await file_input2.set_input_files(path, timeout=5000)
+                                await asyncio.sleep(0.5)
+                                uploaded_any = True
+                                break
+                        except Exception:
+                            continue
+
+                if uploaded_any:
+                    continue
+
+                # Method 3: Paste image via clipboard using base64 data URL
+                ext = os.path.splitext(path)[1].lower().lstrip(".")
+                mime_map = {
+                    "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                    "png": "image/png", "gif": "image/gif",
+                    "webp": "image/webp", "bmp": "image/bmp",
+                }
+                mime = mime_map.get(ext, f"image/{ext}")
+                with open(path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                data_url = f"data:{mime};base64,{b64}"
+
+                chat_input = self.page.locator("textarea, div[contenteditable='true']").first
+                await chat_input.click()
+
+                await self.page.evaluate(f"""
+                    (async () => {{
+                        const dataUrl = {json.dumps(data_url)};
+                        const res = await fetch(dataUrl);
+                        const blob = await res.blob();
+                        const file = new File([blob], {json.dumps(os.path.basename(path))},
+                                              {{type: blob.type}});
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+                        const el = document.querySelector(
+                            "textarea, div[contenteditable='true']"
+                        );
+                        if (el) {{
+                            const pe = new ClipboardEvent('paste', {{
+                                bubbles: true, cancelable: true,
+                                clipboardData: dt
+                            }});
+                            el.dispatchEvent(pe);
+                        }}
+                    }})();
+                """)
+                await asyncio.sleep(0.7)
+                uploaded_any = True
+
+            except Exception:
+                pass
+
+        # Wait for image preview to appear
+        if uploaded_any:
+            await asyncio.sleep(0.5)
+        return uploaded_any
+
+
+    async def _set_input_text(self, text: str) -> None:
+        """Надёжная установка текста в поле ввода (textarea или contenteditable).
+
+        Для contenteditable использует ClipboardEvent('paste') с DataTransfer —
+        самый надёжный способ, который правильно триггерит React onChange.
+        Решает баг со вторым сообщением (Syntax Error), когда .fill() не
+        синхронизировался с внутренним состоянием React.
+        """
+        chat_input = self.page.locator("textarea, div[contenteditable='true']").first
+        await chat_input.wait_for(state="visible", timeout=15000)
+
+        tag = await chat_input.evaluate("el => el.tagName.toLowerCase()")
+
+        if tag == "textarea":
+            # textarea: fill() работает нормально с React
+            await chat_input.click()
+            await chat_input.fill(text)
+        else:
+            # contenteditable div: используем ClipboardEvent paste через DataTransfer
+            # Это правильно триггерит React синтетические события, в отличие от fill()
+            await chat_input.click()
+            await asyncio.sleep(0.05)
+
+            await self.page.evaluate(
+                """(text) => {
+                    const el = document.querySelector("div[contenteditable='true']");
+                    if (!el) return;
+                    el.focus();
+                    // Select all existing content and delete it
+                    const sel = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(el);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    document.execCommand('delete', false, null);
+                    // Paste new text via ClipboardEvent — correctly triggers React's onChange
+                    const dt = new DataTransfer();
+                    dt.setData('text/plain', text);
+                    el.dispatchEvent(new ClipboardEvent('paste', {
+                        bubbles: true,
+                        cancelable: true,
+                        clipboardData: dt
+                    }));
+                }""",
+                text,
+            )
+
+        await asyncio.sleep(0.1)
+
+
+
     async def send_message(self, prompt: str, stream: bool = False):
+        # ── 1. Extract image paths from prompt ──────────────────────────────
+        image_paths = self._IMAGE_PATH_RE.findall(prompt)
+        # Remove image path tags from the text sent to the chat
+        text_prompt = self._IMAGE_PATH_RE.sub("", prompt).strip()
+        # If after removing image refs the text is empty, use a placeholder
+        if image_paths and not text_prompt:
+            text_prompt = "."
+
+        # ── 2. Mark existing response elements so we can find the new ones ──
         try:
             await self.page.evaluate("""
                 document.querySelectorAll(".ds-markdown, [class*='think']").forEach(el => {
@@ -841,34 +1020,61 @@ class DeepAPI:
         except Exception:
             pass
 
-        chat_input = self.page.locator("textarea, div[contenteditable='true']").first
-        await chat_input.wait_for(state="visible", timeout=15000)
-        await chat_input.fill(prompt)
-        await asyncio.sleep(0.1)
-        await chat_input.press("Enter")
+        # ── 3. Upload images (if any) ────────────────────────────────────────
+        if image_paths:
+            await self._upload_images(image_paths)
 
+        # ── 4. Type the text using the reliable method ───────────────────────
+        await self._set_input_text(text_prompt)
+
+        # ── 5. Submit — try Send button first, fall back to Enter ────────────
+        submitted = False
         try:
-            btn = self.page.locator("div[role='button'].ds-button--primary, button.ds-button--primary").last
-            if await btn.count() > 0 and await btn.is_visible():
-                await btn.click(timeout=500)
+            # Look for the primary send button (arrow/paper-plane icon)
+            send_selectors = [
+                "button[aria-label*='Send' i]",
+                "button[aria-label*='Отправить' i]",
+                "[role='button'][aria-label*='Send' i]",
+                "div[role='button'].ds-button--primary:not(.ds-button--circle)",
+                "button.ds-button--primary:not(.ds-button--circle)",
+            ]
+            for sel in send_selectors:
+                btn = self.page.locator(sel).last
+                if await btn.count() > 0 and await btn.is_visible():
+                    await btn.click(timeout=1000)
+                    submitted = True
+                    break
         except Exception:
             pass
 
+        if not submitted:
+            chat_input = self.page.locator("textarea, div[contenteditable='true']").first
+            await chat_input.press("Enter")
+
+        # ── 6. Detect the response container ─────────────────────────────────
         target_container = None
-        new_el = self.page.locator(".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])").first
+        new_el = self.page.locator(
+            ".ds-markdown:not([data-old-mark='true']), [class*='think']:not([data-old-mark='true'])"
+        ).first
         try:
             await new_el.wait_for(state="attached", timeout=6000)
-            target_container = new_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+            target_container = new_el.locator(
+                "xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row')"
+                " or contains(@class, 'chat') or contains(@class, 'ds-a')][1]"
+            )
             if await target_container.count() == 0:
-                target_container = new_el.locator("xpath=../..")
+                target_container = new_el.locator("xpath=../..") 
         except Exception:
             pass
 
         if not target_container or await target_container.count() == 0:
             last_el = self.page.locator(".ds-markdown, [class*='think']").last
-            target_container = last_el.locator("xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row') or contains(@class, 'chat') or contains(@class, 'ds-a')][1]")
+            target_container = last_el.locator(
+                "xpath=ancestor::div[contains(@class, 'message') or contains(@class, 'row')"
+                " or contains(@class, 'chat') or contains(@class, 'ds-a')][1]"
+            )
             if await target_container.count() == 0:
-                target_container = last_el.locator("xpath=../..")
+                target_container = last_el.locator("xpath=../..") 
 
         for _ in range(40):
             if await self.is_generating():

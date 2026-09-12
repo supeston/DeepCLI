@@ -131,9 +131,24 @@ class AdaptiveStreamWriter:
             chars_in_queue = self._buf_len
             chars_left = chars_in_text + chars_in_queue
 
-            # When significantly behind, stream in small fast batches (4-6 chars) with micro-delay
-            if chars_left > 100:
-                chunk_size = min(6, total - index)
+            # When significantly behind, stream in fast batches
+            if chars_left > 200:
+                chunk_size = min(30, total - index)
+                end = index + chunk_size
+                while end < total and text[end] == "\x1b":
+                    m = ANSI_ESCAPE_RE.match(text, end)
+                    if m:
+                        end = m.end()
+                    else:
+                        break
+                sys.stdout.write(text[index:end])
+                sys.stdout.flush()
+                index = end
+                await asyncio.sleep(0.0005)
+                continue
+
+            if chars_left > 60:
+                chunk_size = min(8, total - index)
                 end = index + chunk_size
                 while end < total and text[end] == "\x1b":
                     m = ANSI_ESCAPE_RE.match(text, end)
@@ -147,7 +162,7 @@ class AdaptiveStreamWriter:
                 await asyncio.sleep(0.001)
                 continue
 
-            if chars_left > 25:
+            if chars_left > 15:
                 chunk_size = min(2, total - index)
                 end = index + chunk_size
                 while end < total and text[end] == "\x1b":
@@ -192,8 +207,23 @@ async def write_streaming_chars(text: str, remaining: int = 0):
                 continue
 
         chars_left = total - index + remaining
-        if chars_left > 100:
-            chunk_size = min(6, total - index)
+        if chars_left > 200:
+            chunk_size = min(30, total - index)
+            end = index + chunk_size
+            while end < total and text[end] == "\x1b":
+                m = ANSI_ESCAPE_RE.match(text, end)
+                if m:
+                    end = m.end()
+                else:
+                    break
+            sys.stdout.write(text[index:end])
+            sys.stdout.flush()
+            index = end
+            await asyncio.sleep(0.0005)
+            continue
+
+        if chars_left > 60:
+            chunk_size = min(8, total - index)
             end = index + chunk_size
             while end < total and text[end] == "\x1b":
                 m = ANSI_ESCAPE_RE.match(text, end)
@@ -207,7 +237,7 @@ async def write_streaming_chars(text: str, remaining: int = 0):
             await asyncio.sleep(0.001)
             continue
 
-        if chars_left > 25:
+        if chars_left > 15:
             chunk_size = min(2, total - index)
             end = index + chunk_size
             while end < total and text[end] == "\x1b":
@@ -233,4 +263,5 @@ async def write_streaming_chars(text: str, remaining: int = 0):
         elif char == "\n":
             delay += STREAM_PUNCTUATION_DELAY / 2
         await asyncio.sleep(delay)
+
 

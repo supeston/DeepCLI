@@ -114,12 +114,12 @@ def get_clean_text(text: str) -> str:
     text = re.sub(r"\s*```json\s*\n.*?(?:\"tool\"|\"args\"|\"name\"|\"function\"|\"command\"|\"run_cmd\").*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
 
     # While streaming, the opening marker arrives character by character
-    # (for example "`", "```to", "```tool_call"). Do not print those
-    # temporary fragments or their leading blank lines before the complete
-    # tool block can be recognized and removed by the expressions above.
+    # (for example "```tool_call"). Do not print those temporary fragments
+    # before the complete tool block can be recognized and removed.
+    # Minimum prefix length is 3 to avoid accidentally stripping single backticks or '<'.
     trimmed = text.rstrip()
     for marker in ("```tool_call", "```tool_calls", "```tools", "```tool", "<tool_call>", "<tool_calls>", "<invoke"):
-        for prefix_length in range(len(marker), 0, -1):
+        for prefix_length in range(len(marker), 2, -1):
             prefix = marker[:prefix_length]
             if trimmed.endswith(prefix):
                 text = trimmed[:-prefix_length].rstrip()
@@ -188,6 +188,249 @@ class StableStreamText:
         self._previous = current
         return self._committed
 
+
+
+
+STREAM_INLINE_STYLES = {
+    "***": "\033[1;3m",
+    "**": "\033[1m",
+    "~~": "\033[9m",
+    "*": "\033[3m",
+    "_": "\033[4m",
+    "``": "\033[38;5;222m",
+    "`": "\033[38;5;222m",
+}
+
+
+class StreamingMarkupRenderer:
+    """Progressive incremental Markdown -> ANSI terminal renderer for live streams.
+
+    Processes raw markdown as it arrives monotonically, converting newly
+    arrived characters into ANSI escape sequences without emitting premature reset
+    sequences that break stream continuity.
+    """
+
+    def __init__(self):
+        self.raw_pos = 0
+        self.rendered_text = ""
+        self.active_inline_styles: list[str] = []
+        self.in_code_block = False
+        self.code_lang = ""
+        self.code_line_buf = ""
+        self.in_heading = False
+        self.heading_style = "\033[1;38;5;255m"
+        self.at_line_start = True
+        self.last_char = "\n"
+
+    def _reapply_styles(self) -> str:
+        res = "\033[0m"
+        if self.in_heading:
+            res += self.heading_style
+        for s in self.active_inline_styles:
+            res += STREAM_INLINE_STYLES.get(s, "")
+        return res
+
+    def update(self, source: str) -> str:
+        if not source:
+            return ""
+        if len(source) < self.raw_pos or not source.startswith(source[:self.raw_pos]):
+            # Source got reset or truncated
+            self.raw_pos = 0
+            self.rendered_text = ""
+            self.active_inline_styles.clear()
+            self.in_code_block = False
+            self.code_lang = ""
+            self.code_line_buf = ""
+            self.in_heading = False
+            self.at_line_start = True
+            self.last_char = "\n"
+
+        delta_out = []
+        src_len = len(source)
+
+        while self.raw_pos < src_len:
+            i = self.raw_pos
+
+            # 1. Inside code block
+            if self.in_code_block:
+                line_start = self.at_line_start
+                if line_start and source.startswith("```", i):
+                    fence_m = re.match(r"^```[ \t]*(\n|$)", source[i:])
+                    if fence_m:
+                        if self.code_line_buf:
+                            styled = _highlight_code_line(self.code_line_buf, self.code_lang)
+                            delta_out.append(f"{BORDER_STYLE}│\033[0m {styled}\n")
+                            self.code_line_buf = ""
+                        border_width = 48
+                        delta_out.append(f"{BORDER_STYLE}└──{'─' * (border_width - 3)}\033[0m\n")
+                        self.in_code_block = False
+                        self.code_lang = ""
+                        self.at_line_start = True
+                        self.last_char = "\n"
+                        self.raw_pos = i + fence_m.end()
+                        continue
+                    elif i + 3 >= src_len:
+                        break
+
+                ch = source[i]
+                self.raw_pos += 1
+                if ch == "\n":
+                    styled = _highlight_code_line(self.code_line_buf, self.code_lang)
+                    if self.code_line_buf:
+                        delta_out.append(f"{BORDER_STYLE}│\033[0m {styled}\n")
+                    else:
+                        delta_out.append(f"{BORDER_STYLE}│\033[0m\n")
+                    self.code_line_buf = ""
+                    self.at_line_start = True
+                    self.last_char = "\n"
+                else:
+                    self.code_line_buf += ch
+                    self.at_line_start = False
+                    self.last_char = ch
+                continue
+
+            # 2. Check for code block opening
+            if self.at_line_start and source.startswith("```", i):
+                fence_m = re.match(r"^```([a-zA-Z0-9_\-\.\+\#]*)[ \t]*(\n|$)", source[i:])
+                if fence_m:
+                    has_newline = bool(fence_m.group(2))
+                    if not has_newline and i + fence_m.end() >= src_len:
+                        break
+                    lang = fence_m.group(1).strip()
+                    lang_label = lang if lang else "code"
+                    border_width = 48
+                    bar_len = max(4, border_width - len(lang_label) - 6)
+                    delta_out.append(f"{BORDER_STYLE}┌── {LANG_STYLE}{lang_label}\033[0m {BORDER_STYLE}{'─' * bar_len}\033[0m\n")
+                    self.in_code_block = True
+                    self.code_lang = lang
+                    self.code_line_buf = ""
+                    self.at_line_start = True
+                    self.last_char = "\n"
+                    self.raw_pos = i + fence_m.end()
+                    continue
+                elif i + 3 >= src_len:
+                    break
+
+            # 3. Inside inline code (`code` or ``code``)
+            if self.active_inline_styles and self.active_inline_styles[-1] in ("`", "``"):
+                delim = self.active_inline_styles[-1]
+                if source.startswith(delim, i):
+                    self.active_inline_styles.pop()
+                    delta_out.append(self._reapply_styles())
+                    self.raw_pos = i + len(delim)
+                    self.last_char = delim[-1]
+                    self.at_line_start = False
+                    continue
+                ch = source[i]
+                delta_out.append(ch)
+                self.raw_pos += 1
+                self.at_line_start = (ch == "\n")
+                self.last_char = ch
+                continue
+
+            # 4. Heading detection at line start
+            if self.at_line_start and source[i] == "#":
+                heading = re.match(r"^(#{1,6})[ \t]+", source[i:])
+                if heading:
+                    self.in_heading = True
+                    delta_out.append(self.heading_style)
+                    self.raw_pos = i + heading.end()
+                    self.at_line_start = False
+                    self.last_char = " "
+                    continue
+                elif i + 7 >= src_len and source[i:].strip("#") == "":
+                    break
+
+            # 5. Bullet list at line start
+            if self.at_line_start and source[i] in ("-", "+", "*"):
+                if i + 1 < src_len and source[i + 1] in (" ", "\t"):
+                    delta_out.append("• ")
+                    self.raw_pos = i + 2
+                    while self.raw_pos < src_len and source[self.raw_pos] in (" ", "\t"):
+                        self.raw_pos += 1
+                    self.at_line_start = False
+                    self.last_char = " "
+                    continue
+                elif i + 1 >= src_len:
+                    break
+
+            # 6. Escape sequence
+            if source[i] == "\\" and i + 1 < src_len and source[i + 1] in "*_~`\\":
+                ch = source[i + 1]
+                delta_out.append(ch)
+                self.raw_pos = i + 2
+                self.at_line_start = (ch == "\n")
+                self.last_char = ch
+                continue
+
+            # 7. Check for inline delimiters (***, **, ~~, ``, *, _, `)
+            delimiter = None
+            for candidate in ("***", "**", "~~", "``", "*", "_", "`"):
+                if source.startswith(candidate, i):
+                    if candidate == "_" and i > 0 and source[i - 1].isalnum():
+                        continue
+                    is_closing = bool(self.active_inline_styles and self.active_inline_styles[-1] == candidate)
+                    if not is_closing:
+                        if i + len(candidate) >= src_len:
+                            break
+                        if candidate in ("*", "**", "***", "_") and source[i + len(candidate)].isspace():
+                            continue
+                    delimiter = candidate
+                    break
+            else:
+                if i + 3 >= src_len and any(source.startswith(c[:len(source)-i], i) for c in ("***", "**", "~~", "``")):
+                    break
+
+            if delimiter:
+                if self.active_inline_styles and self.active_inline_styles[-1] == delimiter:
+                    self.active_inline_styles.pop()
+                    delta_out.append(self._reapply_styles())
+                    self.raw_pos = i + len(delimiter)
+                    self.last_char = delimiter[-1]
+                    self.at_line_start = False
+                    continue
+                else:
+                    self.active_inline_styles.append(delimiter)
+                    delta_out.append(STREAM_INLINE_STYLES.get(delimiter, ""))
+                    self.raw_pos = i + len(delimiter)
+                    self.last_char = delimiter[-1]
+                    self.at_line_start = False
+                    continue
+
+            ch = source[i]
+            if ch == "\n":
+                if self.in_heading:
+                    self.in_heading = False
+                    delta_out.append(self._reapply_styles())
+                self.at_line_start = True
+            else:
+                self.at_line_start = False
+
+            delta_out.append(ch)
+            self.last_char = ch
+            self.raw_pos += 1
+
+        chunk_str = "".join(delta_out)
+        self.rendered_text += chunk_str
+        return chunk_str
+
+    def finish(self) -> str:
+        tail = []
+        if self.in_code_block:
+            if self.code_line_buf:
+                styled = _highlight_code_line(self.code_line_buf, self.code_lang)
+                tail.append(f"{BORDER_STYLE}│\033[0m {styled}\n")
+                self.code_line_buf = ""
+            border_width = 48
+            tail.append(f"{BORDER_STYLE}└──{'─' * (border_width - 3)}\033[0m\n")
+            self.in_code_block = False
+        if self.active_inline_styles or self.in_heading:
+            tail.append("\033[0m")
+            self.active_inline_styles.clear()
+            self.in_heading = False
+        res = "".join(tail)
+        self.rendered_text += res
+        return res
 
 
 def get_stable_stream_text(text: str) -> str:
