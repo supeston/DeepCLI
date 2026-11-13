@@ -21,7 +21,11 @@ from rich.align import Align
 from rich.table import Table
 from rich.text import Text
 
-from deepx.api.deep_api import DeepAPI
+from deepx.api.deep_api import (
+    DeepAPI,
+    DeepSeekAccountBannedError,
+    DeepSeekAuthRequiredError,
+)
 from deepx.agent.checkpoints import classify_dangerous_operation
 from deepx.agent.completer import SlashCommandCompleter
 from deepx.agent.prompts import (
@@ -51,7 +55,12 @@ from deepx.core.updater import check_for_updates, perform_self_update
 from deepx.core.version import UpdateInfo, get_local_version
 from deepx.parser.tool_parser import count_tokens, extract_tool_calls
 from deepx.tools.manager import AgentTools
-from deepx.ui.banner import print_help, print_status, render_banner
+from deepx.ui.banner import (
+    print_help,
+    print_status,
+    render_account_ban_panel,
+    render_banner,
+)
 from deepx.ui.markup import (
     StreamingMarkupRenderer,
     get_clean_text,
@@ -429,10 +438,16 @@ class DeepCLIApp:
                 pass
         return total_folded, total_saved
 
-    async def run(self):
-        await self._check_startup_updates(force_refresh=False)
+    def _remove_state_file(self) -> None:
+        try:
+            if self.state_file and os.path.exists(self.state_file):
+                os.remove(self.state_file)
+        except Exception:
+            pass
 
-        if not os.path.isfile(self.state_file):
+    async def _authenticate_interactively(self) -> bool:
+        """Run interactive browser login and return True as soon as session state is saved."""
+        while not os.path.isfile(self.state_file):
             self.refresh_ui(
                 "Авторизуйтесь либо создайте новый аккаунт в DeepSeek."
             )
@@ -447,51 +462,123 @@ class DeepCLIApp:
             try:
                 auth_api = DeepAPI(state_file=self.state_file, headless=False)
                 await auth_api.wait_for_login_and_save()
-                console.print(
-                    "\n[bold #38BDF8]Авторизация получена. Перезапускаю DEEPX...[/bold #38BDF8]"
+                if os.path.isfile(self.state_file):
+                    return True
+            except DeepSeekAccountBannedError as ban_err:
+                self._remove_state_file()
+                self.refresh_ui("Учётная запись DeepSeek заблокирована.")
+                render_account_ban_panel(
+                    ban_until=ban_err.ban_until,
+                    account=ban_err.account,
+                    raw_message=ban_err.raw_message,
                 )
-                self.restart_in_windows_terminal()
+                retry = await _run_in_daemon_thread(
+                    lambda: self._confirm_fn("Открыть браузер для входа в другой аккаунт DeepSeek?")
+                )
+                if not retry:
+                    return False
+                continue
             except Exception as e:
+                if os.path.isfile(self.state_file):
+                    return True
                 console.print(
                     f"\nОшибка авторизации [{type(e).__name__}]: {e}",
                     style="bold red",
                     markup=False,
                     highlight=False,
                 )
-            return
+                retry = await _run_in_daemon_thread(
+                    lambda: self._confirm_fn("Повторить авторизацию в браузере?")
+                )
+                if not retry:
+                    return False
+                continue
+        return True
 
-        self.refresh_ui()
+    async def run(self):
+        await self._check_startup_updates(force_refresh=False)
 
         try:
-            async with DeepAPI(state_file=self.state_file, headless=self.headless) as api:
-                while True:
-                    disable_quick_edit_mode()
-                    prompt_msg = self._build_prompt()
-                    try:
-                        user_input = await _run_in_daemon_thread(
-                            lambda: self.session.prompt(prompt_msg)
+            while not self._exit_requested:
+                just_authenticated = False
+                if not os.path.isfile(self.state_file):
+                    ok = await self._authenticate_interactively()
+                    if not ok:
+                        return
+                    just_authenticated = True
+
+                self.refresh_ui()
+                if just_authenticated:
+                    console.print(
+                        Align.center(
+                            Text(
+                                "[+] Авторизация подтверждена. Подключаю сессию в этом же окне...",
+                                style="bold #10B981",
+                            )
                         )
-                        user_input = user_input.strip()
-                    except KeyboardInterrupt:
-                        if await self.confirm_exit():
-                            console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
-                            break
-                        continue
-                    except EOFError:
-                        console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
+                    )
+
+                try:
+                    async with DeepAPI(state_file=self.state_file, headless=self.headless) as api:
+                        if just_authenticated:
+                            self.refresh_ui()
+                            console.print(
+                                "[bold #10B981][+] Вход выполнен. Сессия DeepSeek активна — можно сразу писать запрос.[/bold #10B981]\n"
+                            )
+
+                        while True:
+                            disable_quick_edit_mode()
+                            prompt_msg = self._build_prompt()
+                            try:
+                                user_input = await _run_in_daemon_thread(
+                                    lambda: self.session.prompt(prompt_msg)
+                                )
+                                user_input = user_input.strip()
+                            except KeyboardInterrupt:
+                                if await self.confirm_exit():
+                                    self._exit_requested = True
+                                    console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
+                                    break
+                                continue
+                            except EOFError:
+                                self._exit_requested = True
+                                console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
+                                break
+
+                            if not user_input:
+                                continue
+
+                            if user_input.startswith("/"):
+                                if await self.handle_command(user_input, api):
+                                    continue
+
+                            await self.run_query_interruptible(user_input, api)
+                            if self._exit_requested:
+                                console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
+                                break
+                    break
+
+                except DeepSeekAccountBannedError as ban_err:
+                    self._remove_state_file()
+                    self.refresh_ui("Учётная запись DeepSeek заблокирована.")
+                    render_account_ban_panel(
+                        ban_until=ban_err.ban_until,
+                        account=ban_err.account,
+                        raw_message=ban_err.raw_message,
+                    )
+                    retry = await _run_in_daemon_thread(
+                        lambda: self._confirm_fn("Открыть браузер для входа в другой аккаунт DeepSeek?")
+                    )
+                    if not retry:
                         break
+                    continue
 
-                    if not user_input:
-                        continue
-
-                    if user_input.startswith("/"):
-                        if await self.handle_command(user_input, api):
-                            continue
-
-                    await self.run_query_interruptible(user_input, api)
-                    if self._exit_requested:
-                        console.print("\n[bold #536DFE]Exiting DEEPX.[/bold #536DFE]")
-                        break
+                except DeepSeekAuthRequiredError:
+                    self._remove_state_file()
+                    console.print(
+                        "\n[bold #FBBF24][!] Сохраненная сессия DeepSeek истекла. Открываю окно входа...[/bold #FBBF24]"
+                    )
+                    continue
 
         except Exception as e:
             message = str(e).replace("\n", " ")
@@ -1153,6 +1240,9 @@ class DeepCLIApp:
                         self._compacted_seed_pending = ""
                         self._pending_workspace_context = ""
                         self._mode_change_notice = ""
+                except DeepSeekAccountBannedError:
+                    status.clear()
+                    raise
                 except Exception as send_error:
                     status.clear()
                     empty_responses += 1

@@ -259,3 +259,47 @@ def print_status(
     console.print()
     console.print(panel)
     console.print()
+
+
+def render_account_ban_panel(
+    ban_until: str,
+    account: str = "",
+    raw_message: str = "",
+) -> None:
+    """Render a high-contrast diagnostic panel when a DeepSeek account is banned/suspended."""
+    term_width = getattr(console, "width", 100) or 100
+    wide_mode = term_width >= 60
+    panel_width = min(BANNER_WIDTH, max(62, term_width - 8)) if wide_mode else max(34, term_width - 2)
+
+    grid = Table.grid(padding=(0, 2), expand=True)
+    grid.add_column(style="bold #F87171", width=18, no_wrap=True)
+    grid.add_column(style="#F8FAFC")
+
+    grid.add_row("Статус:", "[bold #EF4444]УЧЕТНАЯ ЗАПИСЬ DEEPSEEK В БАНЕ[/bold #EF4444]")
+    if account:
+        grid.add_row("Аккаунт:", f"[bold #FBBF24]{rich_escape(account)}[/bold #FBBF24]")
+    until_display = ban_until.strip() if ban_until else "не указано"
+    grid.add_row("Блокировка до:", f"[bold #FBBF24]{rich_escape(until_display)}[/bold #FBBF24]")
+    if raw_message:
+        grid.add_row("Ответ DeepSeek:", f"[#CBD5E1]{rich_escape(raw_message)}[/#CBD5E1]")
+    grid.add_row(
+        "Сессия:",
+        "[#94A3B8]Заблокированная сессия автоматически сброшена. Войдите в другой аккаунт.[/]",
+    )
+
+    panel = Panel(
+        grid,
+        title="[bold #EF4444] [!] DEEPSEEK ACCOUNT SUSPENDED [/bold #EF4444]",
+        title_align="left",
+        subtitle="[dim #94A3B8] Enter: сменить аккаунт  ·  Esc: выход [/dim #94A3B8]",
+        subtitle_align="center",
+        border_style="#EF4444",
+        box=box.ROUNDED,
+        padding=(1, 2) if wide_mode else (0, 1),
+        width=panel_width,
+        expand=False,
+    )
+    console.print()
+    console.print(Align.center(panel))
+    console.print()
+

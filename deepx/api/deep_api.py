@@ -51,6 +51,91 @@ def _has_complete_tool_call(text: str) -> bool:
         return False
 
 
+_BAN_PATTERNS = (
+    re.compile(
+        r"(?:Из-за\s+нарушения\s+правил[^.\n]*?(?:учетная\s+запись|аккаунт)\s+(?:заблокирована?|приостановлена?|заморожена?|ограничена?)"
+        r"|(?:ваша\s+учетная\s+запись|ваш\s+аккаунт)\s+(?:заблокирована?|приостановлена?|заморожена?|ограничена?))"
+        r"(?:\s+до\s+([^.\n!]+))?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:Due\s+to\s+a\s+violation[^.\n]*?account\s+(?:has\s+been\s+|is\s+)?(?:suspended|banned|blocked|restricted|disabled)"
+        r"|your\s+account\s+(?:has\s+been\s+|is\s+)(?:suspended|banned|blocked|restricted|disabled))"
+        r"(?:\s+(?:until|till|to)\s+([^.\n!]+))?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:由于违反[^。\n]*?(?:账号|账户)(?:已被)?(?:封禁|限制|停用|冻结)"
+        r"|(?:您的)?(?:账号|账户)已被(?:封禁|限制|停用|冻结))"
+        r"(?:至\s*([^。\n!]+))?",
+        re.IGNORECASE,
+    ),
+)
+
+_MASKED_OR_USER_EMAIL_RE = re.compile(
+    r"\b([A-Za-z0-9._%+-]{1,32}(?:\*{2,12}[A-Za-z0-9._%+-]*)?@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b"
+)
+
+
+class DeepSeekAccountBannedError(RuntimeError):
+    """Raised when the logged-in DeepSeek account is suspended/banned."""
+
+    def __init__(self, ban_until: str = "", account: str = "", raw_message: str = ""):
+        self.ban_until = (ban_until or "не указано").strip()
+        self.account = (account or "").strip()
+        self.raw_message = (raw_message or "").strip()
+        acct_part = f" ({self.account})" if self.account else ""
+        until_part = (
+            f" до {self.ban_until}"
+            if self.ban_until and self.ban_until.lower() not in ("не указано", "unknown")
+            else ""
+        )
+        msg = f"Ваш аккаунт DeepSeek{acct_part} заблокирован{until_part}."
+        if self.raw_message:
+            msg += f" [{self.raw_message}]"
+        super().__init__(msg)
+
+
+class DeepSeekAuthRequiredError(RuntimeError):
+    """Raised when the saved DeepSeek session has expired or requires login."""
+
+
+def parse_ban_notice_text(body_text: str, account_hint: str = "") -> dict | None:
+    """Detect DeepSeek account suspension notices and extract ban expiration and account."""
+    raw = str(body_text or "").strip()
+    if not raw:
+        return None
+    normalized = re.sub(r"[ \t]+", " ", raw)
+
+    for pattern in _BAN_PATTERNS:
+        m = pattern.search(normalized)
+        if not m:
+            continue
+        until_val = (m.group(1) or "").strip().rstrip(".,; ")
+        # Extract full sentence surrounding the match
+        start = max(0, normalized.rfind("\n", 0, m.start()) + 1)
+        end_nl = normalized.find("\n", m.end())
+        snippet = normalized[start : end_nl if end_nl != -1 else len(normalized)].strip()
+        if len(snippet) > 280:
+            snippet = normalized[max(0, m.start() - 20) : min(len(normalized), m.end() + 140)].strip()
+
+        account = str(account_hint or "").strip()
+        if not account:
+            for em in _MASKED_OR_USER_EMAIL_RE.findall(normalized):
+                low_em = em.lower()
+                if not low_em.endswith("@deepseek.com"):
+                    account = em
+                    break
+
+        return {
+            "is_banned": True,
+            "ban_until": until_val or "не указано (см. окно DeepSeek)",
+            "account": account,
+            "raw_message": snippet,
+        }
+    return None
+
+
 class DeepAPI:
     def __init__(self, state_file: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), "core", "state.json"), headless: bool = False):
         self.state_file = state_file
@@ -60,6 +145,45 @@ class DeepAPI:
         self.context = None
         self.page = None
         self.stealth_status = "not initialized"
+        self._is_banned = False
+
+    def _purge_invalid_state_file(self) -> None:
+        try:
+            if self.state_file and os.path.exists(self.state_file):
+                os.remove(self.state_file)
+        except Exception:
+            pass
+
+    async def detect_account_ban(self) -> dict | None:
+        if not self.page or self.page.is_closed():
+            return None
+        try:
+            dom_snapshot = await self.page.evaluate(
+                """() => {
+                    const bodyText = document.body ? (document.body.innerText || "") : "";
+                    let accountHint = "";
+                    const candidates = document.querySelectorAll("div, span, p, a");
+                    for (const el of candidates) {
+                        const t = (el.textContent || "").trim();
+                        if (t.length >= 6 && t.length <= 64 && /@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/.test(t) && !/deepseek\\.com/i.test(t)) {
+                            accountHint = t;
+                            break;
+                        }
+                    }
+                    return { bodyText, accountHint };
+                }"""
+            )
+            if not isinstance(dom_snapshot, dict):
+                return None
+            info = parse_ban_notice_text(
+                dom_snapshot.get("bodyText", ""),
+                dom_snapshot.get("accountHint", ""),
+            )
+            if info:
+                self._is_banned = True
+            return info
+        except Exception:
+            return None
 
     async def _require_stealth(self):
         try:
@@ -99,6 +223,9 @@ class DeepAPI:
             try:
                 await self._start_once()
                 return
+            except (DeepSeekAccountBannedError, DeepSeekAuthRequiredError):
+                await self.close()
+                raise
             except Exception as exc:
                 last_error = exc
                 message = str(exc).lower()
@@ -113,13 +240,15 @@ class DeepAPI:
         raise last_error
 
     async def _start_once(self):
+        self._is_banned = False
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=self.headless,
             args=["--disable-blink-features=AutomationControlled"]
         )
 
-        if os.path.exists(self.state_file):
+        had_state = os.path.exists(self.state_file)
+        if had_state:
             self.context = await self.browser.new_context(storage_state=self.state_file)
         else:
             self.context = await self.browser.new_context()
@@ -132,12 +261,61 @@ class DeepAPI:
             timeout=60000
         )
 
-        if not os.path.exists(self.state_file):
-            await self.page.wait_for_selector("textarea, div[contenteditable='true']", timeout=120000)
-            await self.context.storage_state(path=self.state_file)
+        # Verify session readiness, ban state, or login requirement
+        wait_seconds = 25.0 if had_state else 120.0
+        steps = max(1, int(wait_seconds / 0.4))
+        for step in range(steps):
+            if self.page.is_closed():
+                raise RuntimeError("Окно браузера DeepSeek было закрыто.")
+
+            ban_info = await self.detect_account_ban()
+            if ban_info:
+                self._purge_invalid_state_file()
+                raise DeepSeekAccountBannedError(
+                    ban_until=ban_info["ban_until"],
+                    account=ban_info["account"],
+                    raw_message=ban_info["raw_message"],
+                )
+
+            composer = self.page.locator("textarea, div[contenteditable='true']").first
+            try:
+                if await composer.count() and await composer.is_visible():
+                    state_dir = os.path.dirname(os.path.abspath(self.state_file))
+                    os.makedirs(state_dir, exist_ok=True)
+                    await self.context.storage_state(path=self.state_file)
+                    return
+            except Exception:
+                pass
+
+            if had_state and step >= 6:
+                cur_url = (self.page.url or "").lower()
+                login_field = self.page.locator("input[type='password']").first
+                try:
+                    if "/sign_in" in cur_url or (await login_field.count() and await login_field.is_visible()):
+                        self._purge_invalid_state_file()
+                        raise DeepSeekAuthRequiredError("Сессия DeepSeek истекла или требует входа.")
+                except DeepSeekAuthRequiredError:
+                    raise
+                except Exception:
+                    pass
+
+            await asyncio.sleep(0.4)
+
+        ban_info = await self.detect_account_ban()
+        if ban_info:
+            self._purge_invalid_state_file()
+            raise DeepSeekAccountBannedError(
+                ban_until=ban_info["ban_until"],
+                account=ban_info["account"],
+                raw_message=ban_info["raw_message"],
+            )
+        if had_state:
+            self._purge_invalid_state_file()
+            raise DeepSeekAuthRequiredError("Не удалось подтвердить активную сессию DeepSeek.")
+        raise RuntimeError("Время ожидания авторизации в DeepSeek истекло.")
 
     async def wait_for_login_and_save(self):
-                                                                                      
+        self._is_banned = False
         self.headless = False
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
@@ -147,6 +325,7 @@ class DeepAPI:
         self.context = await self.browser.new_context()
         await self._require_stealth()
         self.page = await self.context.new_page()
+        saved_ok = False
 
         try:
             await self.page.goto(
@@ -155,12 +334,21 @@ class DeepAPI:
                 timeout=60000
             )
 
-                                                                              
-                                                                    
             while True:
                 if self.page.is_closed():
+                    if saved_ok:
+                        return
                     raise RuntimeError(
                         "Окно DeepSeek было закрыто до завершения авторизации."
+                    )
+
+                ban_info = await self.detect_account_ban()
+                if ban_info:
+                    self._purge_invalid_state_file()
+                    raise DeepSeekAccountBannedError(
+                        ban_until=ban_info["ban_until"],
+                        account=ban_info["account"],
+                        raw_message=ban_info["raw_message"],
                     )
 
                 composer = self.page.locator(
@@ -168,18 +356,31 @@ class DeepAPI:
                 ).first
                 try:
                     if await composer.count() and await composer.is_visible():
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(0.9)
+                        ban_info = await self.detect_account_ban()
+                        if ban_info:
+                            self._purge_invalid_state_file()
+                            raise DeepSeekAccountBannedError(
+                                ban_until=ban_info["ban_until"],
+                                account=ban_info["account"],
+                                raw_message=ban_info["raw_message"],
+                            )
                         state_dir = os.path.dirname(os.path.abspath(self.state_file))
                         os.makedirs(state_dir, exist_ok=True)
                         await self.context.storage_state(path=self.state_file)
+                        saved_ok = True
                         return
+                except DeepSeekAccountBannedError:
+                    raise
                 except Exception as exc:
+                    if saved_ok:
+                        return
                     if self.page.is_closed():
                         raise RuntimeError(
                             "Окно DeepSeek было закрыто до завершения авторизации."
                         ) from exc
 
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.5)
         finally:
             await self.close()
 
@@ -192,7 +393,7 @@ class DeepAPI:
         self.browser = None
         self.playwright = None
 
-        if context and os.path.exists(self.state_file):
+        if context and not self._is_banned and os.path.exists(self.state_file):
             try:
                 await asyncio.wait_for(context.storage_state(path=self.state_file), timeout=1.2)
             except Exception:
@@ -962,7 +1163,18 @@ class DeepAPI:
         синхронизировался с внутренним состоянием React.
         """
         chat_input = self.page.locator("textarea, div[contenteditable='true']").first
-        await chat_input.wait_for(state="visible", timeout=15000)
+        try:
+            await chat_input.wait_for(state="visible", timeout=15000)
+        except Exception as exc:
+            ban_info = await self.detect_account_ban()
+            if ban_info:
+                self._purge_invalid_state_file()
+                raise DeepSeekAccountBannedError(
+                    ban_until=ban_info["ban_until"],
+                    account=ban_info["account"],
+                    raw_message=ban_info["raw_message"],
+                ) from exc
+            raise
 
         tag = await chat_input.evaluate("el => el.tagName.toLowerCase()")
 

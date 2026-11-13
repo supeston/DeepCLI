@@ -836,3 +836,125 @@ def test_bootstrap_launcher_window_wt_and_fallback(monkeypatch, tmp_path):
     assert "--no-relaunch" in fallback_cmd
     assert fallback_kw.get("creationflags", 0) == getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
 
+
+def test_deepseek_account_ban_detection_and_seamless_login_continuation(monkeypatch, tmp_path):
+    from rich.console import Console
+    import deepx.agent.runner as runner_mod
+    import deepx.ui.banner as banner_mod
+    from deepx.api.deep_api import DeepSeekAccountBannedError, parse_ban_notice_text
+
+    # 1. Exact Russian ban text from screenshot
+    ru_page = (
+        "Новый чат\nЗдравствуйте, чем могу помочь?\n"
+        "Из-за нарушения правил пользования ваша учетная запись заблокирована до ноябрь 22, 2026 14:34. "
+        "Если у вас есть вопросы, пожалуйста, Свяжитесь с нами.\n"
+        "de*****37@gmail.com"
+    )
+    info = parse_ban_notice_text(ru_page)
+    assert info is not None
+    assert info["is_banned"] is True
+    assert info["ban_until"] == "ноябрь 22, 2026 14:34"
+    assert info["account"] == "de*****37@gmail.com"
+
+    # 2. English ban text
+    en_page = "Due to a violation of our Terms of Use, your account has been suspended until November 22, 2026 14:34."
+    info_en = parse_ban_notice_text(en_page, account_hint="user***@mail.com")
+    assert info_en is not None
+    assert info_en["ban_until"] == "November 22, 2026 14:34"
+    assert info_en["account"] == "user***@mail.com"
+
+    # 3. Normal page returns None
+    assert parse_ban_notice_text("Здравствуйте, чем могу помочь? Новый чат") is None
+
+    # 4. Ban panel rendering has no emojis and shows ban_until & account
+    cap = Console(record=True, width=100, force_terminal=False, color_system=None)
+    monkeypatch.setattr(banner_mod, "console", cap)
+    banner_mod.render_account_ban_panel(
+        ban_until="ноябрь 22, 2026 14:34",
+        account="de*****37@gmail.com",
+        raw_message="Из-за нарушения правил пользования ваша учетная запись заблокирована до ноябрь 22, 2026 14:34.",
+    )
+    panel_txt = cap.export_text()
+    assert "DEEPSEEK ACCOUNT SUSPENDED" in panel_txt
+    assert "ноябрь 22, 2026 14:34" in panel_txt
+    assert "de*****37@gmail.com" in panel_txt
+    assert not _contains_emoji(panel_txt)
+
+    # 5. Seamless login -> immediate chat in the SAME session without restarting or exiting
+    state_path = tmp_path / "state.json"
+    ws = tmp_path / "ws"
+    ws.mkdir()
+
+    class _FakeSeamlessDeepAPI:
+        def __init__(self, state_file="", headless=True):
+            self.state_file = state_file
+            self.headless = headless
+
+        async def wait_for_login_and_save(self):
+            Path(self.state_file).write_text('{"cookies": []}', encoding="utf-8")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def start(self):
+            return None
+
+        async def close(self):
+            return None
+
+        async def set_mode(self, _m):
+            return True
+
+        async def set_deepthink(self, _t):
+            return True
+
+        async def set_search(self, _s):
+            return True
+
+        async def send_message(self, _prompt, stream=True):
+            async def _gen():
+                yield {"think": "", "answer": "Готов к работе сразу после входа."}
+
+            return _gen()
+
+    monkeypatch.setattr(runner_mod, "DeepAPI", _FakeSeamlessDeepAPI)
+    app = DeepCLIApp(state_file=str(state_path), headless=True, cwd=str(ws), confirm_fn=lambda _q: False)
+    prompts = iter(["привет"])
+
+    def _fake_prompt(_msg):
+        try:
+            return next(prompts)
+        except StopIteration:
+            raise EOFError()
+
+    monkeypatch.setattr(app.session, "prompt", _fake_prompt)
+    asyncio.run(app.run())
+    assert state_path.is_file()
+    assert "Готов к работе сразу после входа." in app.last_response
+
+    # 6. Banned account during login surfaces ban panel and cleans state file
+    state_ban = tmp_path / "state_ban.json"
+
+    class _FakeBannedDeepAPI(_FakeSeamlessDeepAPI):
+        async def wait_for_login_and_save(self):
+            raise DeepSeekAccountBannedError(
+                ban_until="ноябрь 22, 2026 14:34",
+                account="de*****37@gmail.com",
+                raw_message="Из-за нарушения правил пользования ваша учетная запись заблокирована до ноябрь 22, 2026 14:34.",
+            )
+
+    monkeypatch.setattr(runner_mod, "DeepAPI", _FakeBannedDeepAPI)
+    ban_cap = Console(record=True, width=100, force_terminal=False, color_system=None)
+    monkeypatch.setattr(banner_mod, "console", ban_cap)
+    monkeypatch.setattr(runner_mod, "console", ban_cap)
+    app_ban = DeepCLIApp(state_file=str(state_ban), headless=True, cwd=str(ws), confirm_fn=lambda _q: False)
+    asyncio.run(app_ban.run())
+    ban_out = ban_cap.export_text()
+    assert "ноябрь 22, 2026 14:34" in ban_out
+    assert "de*****37@gmail.com" in ban_out
+    assert not state_ban.exists()
+
+
