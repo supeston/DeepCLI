@@ -68,7 +68,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Запуск и верификация pytest test_auth.py' },
           ],
         },
-        { type: 'tool', toolName: 'filesystem.read_file("src/auth.py")', toolOutput: '✓ Read 48 lines (Legacy plaintext session tokens detected)', duration: 1200 },
+        { type: 'tool', toolName: 'read_file("src/auth.py", start_line=1, end_line=48)', toolOutput: 'Read 48 lines · AST symbols indexed (create_session, verify_user)', duration: 1200 },
         { type: 'think', content: 'Обнаружен plaintext token, заменяю на jose.jwt реализацию.', duration: 1200 },
         {
           type: 'tasks',
@@ -81,7 +81,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Запуск и верификация pytest test_auth.py' },
           ],
         },
-        { type: 'tool', toolName: 'filesystem.write_file("src/auth.py", ...)', duration: 1500 },
+        { type: 'tool', toolName: 'write_file("src/auth.py", ...)', duration: 1500 },
         {
           type: 'code',
           lang: 'python',
@@ -99,7 +99,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Запуск и верификация pytest test_auth.py' },
           ],
         },
-        { type: 'tool', toolName: 'filesystem.replace_file_content("src/middleware.py", ...)', toolOutput: '✓ Injected JWT header verification and HTTP 401 Unauthorized guard', duration: 1500 },
+        { type: 'tool', toolName: 'edit_file("src/middleware.py", ...)', toolOutput: 'Checkpoint saved (.deepx_history) · Injected JWT HTTP 401 guard', duration: 1500 },
         {
           type: 'tasks',
           percent: 75,
@@ -111,7 +111,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'active', text: 'Запуск и верификация pytest test_auth.py' },
           ],
         },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("pytest tests/test_auth.py -v")', duration: 2500, toolOutput: 'rootdir: C:\\Projects\\AuthAPI, configfile: pytest.ini\n✓ tests/test_auth.py::test_create_jwt PASSED        [ 25%]\n✓ tests/test_auth.py::test_verify_valid_token PASSED   [ 50%]\n✓ tests/test_auth.py::test_expired_token PASSED        [ 75%]\n✓ tests/test_auth.py::test_middleware_guard PASSED     [100%]\n══════════════════════ 4 passed in 0.32s ═════════════════════' },
+        { type: 'tool', toolName: 'run_cmd("pytest tests/test_auth.py -v")', duration: 2500, toolOutput: 'rootdir: C:\\Projects\\AuthAPI, configfile: pytest.ini\n[+] tests/test_auth.py::test_create_jwt PASSED        [ 25%]\n[+] tests/test_auth.py::test_verify_valid_token PASSED   [ 50%]\n[+] tests/test_auth.py::test_expired_token PASSED        [ 75%]\n[+] tests/test_auth.py::test_middleware_guard PASSED     [100%]\n4 passed in 0.32s' },
         {
           type: 'tasks',
           percent: 100,
@@ -144,7 +144,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Создание Git коммита с фиксом' },
           ],
         },
-        { type: 'tool', toolName: 'clipboard.get_clipboard_image()', toolOutput: '✓ Captured active clipboard bitmap (1920x1080, 2.4 MB, Format: CF_DIBV5)', duration: 1400 },
+        { type: 'tool', toolName: 'get_clipboard_image()', toolOutput: 'Captured active clipboard bitmap (1920x1080, 2.4 MB, Format: CF_DIBV5)', duration: 1400 },
         { type: 'think', content: 'Изображение успешно получено. Отправляю в Vision Engine для OCR-анализа стека вызовов.', duration: 1800 },
         {
           type: 'tasks',
@@ -169,7 +169,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Создание Git коммита с фиксом' },
           ],
         },
-        { type: 'tool', toolName: 'filesystem.replace_file_content("Services/UserService.cs", ...)', toolOutput: '✓ Added null-conditional coalescing: user?.Profile?.Settings ?? DefaultSettings', duration: 1500 },
+        { type: 'tool', toolName: 'edit_file("Services/UserService.cs", ...)', toolOutput: 'Added null-conditional coalescing: user?.Profile?.Settings ?? DefaultSettings', duration: 1500 },
         {
           type: 'tasks',
           percent: 75,
@@ -181,7 +181,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'active', text: 'Создание Git коммита с фиксом' },
           ],
         },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("git commit -am \\"fix(user): safeguard profile null reference\\"")', toolOutput: '[main 9cf3a1e] fix(user): safeguard profile null reference\n 1 file changed, 4 insertions(+), 1 deletion(-)', duration: 2000 },
+        { type: 'tool', toolName: 'run_cmd("git commit -am \\"fix(user): safeguard profile null reference\\"")', toolOutput: '[main 9cf3a1e] fix(user): safeguard profile null reference\n 1 file changed, 4 insertions(+), 1 deletion(-)', duration: 2000 },
         {
           type: 'tasks',
           percent: 100,
@@ -203,12 +203,12 @@ export const TerminalSimulator: React.FC = () => {
       userPrompt: 'Почини докер-компоуз, контейнер db падает с exit code 137',
       steps: [
         { type: 'think', content: 'DeepThink Engine: Exit code 137 означает OOM (Out Of Memory). Анализирую docker-compose.yml и логи контейнера db...', duration: 2000 },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("docker compose logs --tail=50 db")', toolOutput: '... \nFATAL ERROR: cannot allocate memory for shared pool\nOut of Memory: Killed process 1 (postgres)', duration: 2200 },
-        { type: 'tool', toolName: 'filesystem.read_file("docker-compose.yml")', toolOutput: '✓ Read 32 lines. Service "db" has memory_limit: 128m', duration: 1000 },
+        { type: 'tool', toolName: 'run_cmd("docker compose logs --tail=50 db")', toolOutput: '... \nFATAL ERROR: cannot allocate memory for shared pool\nOut of Memory: Killed process 1 (postgres)', duration: 2200 },
+        { type: 'tool', toolName: 'read_file("docker-compose.yml")', toolOutput: 'Read 32 lines · Service "db" has memory_limit: 128m', duration: 1000 },
         { type: 'think', content: 'PostgreSQL требует больше памяти, 128m слишком мало для инициализации. Увеличиваю лимит и перезапускаю.', duration: 1500 },
         { type: 'code', lang: 'yaml', duration: 1500, code: `  db:\n    image: postgres:15-alpine\n    environment:\n      POSTGRES_PASSWORD: secret\n    deploy:\n      resources:\n        limits:\n          memory: 512M  # Increased from 128m\n    ports:\n      - "5432:5432"` },
-        { type: 'tool', toolName: 'filesystem.replace_file_content("docker-compose.yml", ...)', toolOutput: '✓ Memory limit updated to 512M', duration: 1200 },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("docker compose up -d db")', toolOutput: 'Recreating db ... done\nAttaching to db\ndb  | PostgreSQL init process complete; ready for start up.', duration: 3000 },
+        { type: 'tool', toolName: 'edit_file("docker-compose.yml", ...)', toolOutput: 'Checkpoint saved · Memory limit updated to 512M', duration: 1200 },
+        { type: 'tool', toolName: 'run_cmd("docker compose up -d db")', toolOutput: 'Recreating db ... done\nAttaching to db\ndb  | PostgreSQL init process complete; ready for start up.', duration: 3000 },
         { type: 'ai', content: 'Контейнер БД падал из-за нехватки памяти (OOM Killed). Я увеличил лимит памяти для PostgreSQL с 128M до 512M в docker-compose.yml и успешно перезапустил контейнер.' },
       ],
     },
@@ -219,13 +219,13 @@ export const TerminalSimulator: React.FC = () => {
       userPrompt: 'Разреши git conflict в файле src/router.tsx, аккуратно совмести изменения из обеих веток',
       steps: [
         { type: 'think', content: 'DeepThink Engine: анализирую Git status и маркеры конфликта в src/router.tsx...', duration: 1500 },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("git status")', toolOutput: 'Unmerged paths:\n  (use "git add <file>..." to mark resolution)\n\tboth modified:   src/router.tsx', duration: 1200 },
-        { type: 'tool', toolName: 'filesystem.read_file("src/router.tsx")', toolOutput: '✓ Found conflict markers (<<<<<<< HEAD ... ======= ... >>>>>>> feature/auth)', duration: 1000 },
+        { type: 'tool', toolName: 'run_cmd("git status")', toolOutput: 'Unmerged paths:\n  (use "git add <file>..." to mark resolution)\n\tboth modified:   src/router.tsx', duration: 1200 },
+        { type: 'tool', toolName: 'read_file("src/router.tsx")', toolOutput: 'Found conflict markers (<<<<<<< HEAD ... ======= ... >>>>>>> feature/auth)', duration: 1000 },
         { type: 'think', content: 'В HEAD добавлены новые роуты Dashboard и Settings. В feature/auth добавлен Middleware-обёртка <ProtectedRoute>. Совмещаю AST деревья React...', duration: 2500 },
         { type: 'code', lang: 'tsx', duration: 2200, code: `// Resolved Conflict:\n<BrowserRouter>\n  <Routes>\n    <Route path="/" element={<Home />} />\n    {/* From feature/auth branch */}\n    <Route element={<ProtectedRoute />}>\n      {/* From HEAD branch */}\n      <Route path="/dashboard" element={<Dashboard />} />\n      <Route path="/settings" element={<Settings />} />\n    </Route>\n  </Routes>\n</BrowserRouter>` },
-        { type: 'tool', toolName: 'filesystem.write_file("src/router.tsx", ...)', toolOutput: '✓ Conflict resolved and written cleanly', duration: 1200 },
-        { type: 'tool', toolName: 'terminal.run_in_terminal("git add src/router.tsx && git commit -m \\"chore: resolve merge conflict in router\\"")', toolOutput: '[feature/auth 2b8e11a] chore: resolve merge conflict in router', duration: 1800 },
-        { type: 'ai', content: 'Конфликт разрешён! Я обернул добавленные вами новые роуты (Dashboard, Settings) в компонент ProtectedRoute из ветки feature/auth, сохранив изменения обеих сторон. Коммит слияния создан.' },
+        { type: 'tool', toolName: 'write_file("src/router.tsx", ...)', toolOutput: 'Conflict resolved and written cleanly', duration: 1200 },
+        { type: 'tool', toolName: 'run_cmd("git add src/router.tsx && git commit -m \\"chore: resolve merge conflict in router\\"")', toolOutput: '[feature/auth 2b8e11a] chore: resolve merge conflict in router', duration: 1800 },
+        { type: 'ai', content: 'Конфликт разрешён. Роуты Dashboard и Settings обёрнуты в ProtectedRoute из ветки feature/auth, сохранив изменения обеих сторон. Коммит слияния создан.' },
       ],
     },
     {
@@ -235,9 +235,9 @@ export const TerminalSimulator: React.FC = () => {
       userPrompt: 'Запусти сервер приложения в фоне, отправь проверочный payload и убедись в 200 OK',
       steps: [
         { type: 'think', content: 'DeepThink Engine: создаю изолированную Windows ConPTY сессию для фонового сервера...', duration: 1500 },
-        { type: 'tool', toolName: 'terminal.spawn_background_process("uvicorn app:main --port 8000")', toolOutput: '✓ Background Task [task-1082] spawned. Monitoring ConPTY pipe stream...', duration: 1200 },
+        { type: 'tool', toolName: 'start_background_task("uvicorn app:main --port 8000")', toolOutput: 'Background Task [task-1] spawned · ConPTY stream attached', duration: 1200 },
         { type: 'output', content: 'INFO: Started server process [PID 14208]\nINFO: Waiting for application startup.\nINFO: Application startup complete. Uvicorn running on http://127.0.0.1:8000', duration: 2500 },
-        { type: 'tool', toolName: 'web.http_request("POST", "http://127.0.0.1:8000/healthcheck")', toolOutput: '✓ Response 200 OK {"status": "healthy", "latency_ms": 1.2, "db": "connected"}', duration: 1500 },
+        { type: 'tool', toolName: 'run_python("import httpx; print(httpx.post(\'http://127.0.0.1:8000/healthcheck\').json())")', toolOutput: 'Response 200 OK {"status": "healthy", "latency_ms": 1.2, "db": "connected"}', duration: 1500 },
         { type: 'ai', content: 'Фоновый сервер отработал штатно, эндпоинт /healthcheck вернул 200 OK (1.2ms). Сессия ConPTY корректно закрыта без утечек дескрипторов.' },
       ],
     },
@@ -247,9 +247,9 @@ export const TerminalSimulator: React.FC = () => {
       icon: Globe,
       userPrompt: 'Собери документацию по FastAPI 0.115 и сохрани выжимку в docs.md',
       steps: [
-        { type: 'think', content: 'DeepThink Engine: инициализирую Playwright со стелс-профилем для обхода Cloudflare защиты...', duration: 1800 },
-        { type: 'tool', toolName: 'browser.navigate("https://fastapi.tiangolo.com/release-notes/")', toolOutput: '✓ Headless Playwright ready. Page loaded in 420ms (Title: "FastAPI Release Notes")', duration: 2000 },
-        { type: 'tool', toolName: 'filesystem.write_file("docs/fastapi_0115.md", ...)', toolOutput: '✓ Created docs/fastapi_0115.md (Key changes: Pydantic V2 migration, async lifespan handlers)', duration: 1500 },
+        { type: 'think', content: 'DeepThink Engine: инициализирую Playwright со стелс-профилем 2.x для обхода Cloudflare защиты...', duration: 1800 },
+        { type: 'tool', toolName: 'web_get_text("https://fastapi.tiangolo.com/release-notes/")', toolOutput: 'Playwright Stealth 2.x ready · Page loaded in 420ms ("FastAPI Release Notes")', duration: 2000 },
+        { type: 'tool', toolName: 'write_file("docs/fastapi_0115.md", ...)', toolOutput: 'Created docs/fastapi_0115.md (Key changes: Pydantic V2 migration, async lifespan handlers)', duration: 1500 },
         { type: 'ai', content: 'Документация собрана и структурирована в docs/fastapi_0115.md. Описаны новые возможности async lifespan и Pydantic V2 интеграции.' },
       ],
     },
@@ -332,14 +332,14 @@ export const TerminalSimulator: React.FC = () => {
   };
 
   return (
-    <section id="terminal" className="py-20 bg-slate-50 border-y border-slate-200">
+    <section id="terminal" className="py-20 deepx-section-band border-y border-slate-200/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-10">
-          <h2 className="text-3xl sm:text-4xl font-normal text-[#1F1F1F] tracking-tight mb-4">
+          <h2 className="text-3xl sm:text-4xl font-normal text-[#111318] tracking-tight mb-4">
             Real-Time Terminal Execution
           </h2>
-          <p className="text-[#5F6368] text-base sm:text-lg font-normal">
-            Autonomous multi-task decomposition, live ConPTY terminal subprocesses, WinRT clipboard integration, and complex Git operations.
+          <p className="text-[#475569] text-base sm:text-lg font-normal">
+            Autonomous multi-task decomposition, live ConPTY subprocesses, WinRT clipboard capture, and closed-loop verification.
           </p>
         </div>
 

@@ -13,8 +13,8 @@ export function App() {
 
   return (
     <HashRouter>
-      <div className="relative min-h-screen bg-white text-[#1F1F1F] selection:bg-[#536DFE]/20 selection:text-[#536DFE]">
-        {/* DeepX Particle Field */}
+      <div className="relative min-h-screen bg-[#FAFAFC] text-[#111318] selection:bg-[#536DFE]/20 selection:text-[#536DFE]">
+        {/* DeepX Kinetic Coordinate & Signal Field */}
         <ParticleCanvas />
 
         {/* Navigation - slides down from top after hero headline typing completes */}

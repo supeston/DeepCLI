@@ -5,45 +5,45 @@ import { ScrollReveal, TextScrollReveal } from './ScrollReveal';
 export const UseCasesSection: React.FC = () => {
   const cases = [
     {
-      title: 'Frontend Engineering',
-      icon: Layout,
-      color: 'text-[#536DFE]',
-      bg: 'bg-[#536DFE]/10',
-      desc: 'Rapidly scaffold React components, debug CSS layouts, and optimize Tailwind configs from the terminal.',
-      tags: ['React', 'Tailwind', 'Vite'],
-    },
-    {
-      title: 'Full-Stack Systems',
-      icon: Database,
-      color: 'text-[#536DFE]',
-      bg: 'bg-[#536DFE]/10',
-      desc: 'Generate robust backend APIs, configure database schemas, and orchestrate Docker containers seamlessly.',
-      tags: ['Node.js', 'Python', 'SQL'],
-    },
-    {
-      title: 'Autonomous Refactoring',
+      title: 'Coder Profile · AST & ConPTY',
       icon: Code2,
       color: 'text-[#536DFE]',
       bg: 'bg-[#536DFE]/10',
-      desc: 'Point DeepX to a legacy codebase. It will analyze dependencies, apply modern patterns, and commit changes.',
-      tags: ['Git', 'Clean Code', 'Testing'],
+      desc: 'Indexes repository symbols on turn zero, reads bounded file slices in parallel, executes real pytest/build loops in Windows ConPTY, and stores .deepx_history checkpoints for instant /undo rollback.',
+      tags: ['AST Repo Map', '/mode plan', '/undo Checkpoints'],
+    },
+    {
+      title: 'Full-Stack & VDS DevOps',
+      icon: Database,
+      color: 'text-[#536DFE]',
+      bg: 'bg-[#536DFE]/10',
+      desc: 'Spawns persistent background tasks, inspects Docker & uvicorn logs live, and deploys directly to remote Linux servers over Paramiko SSH/SFTP via vds_cmd and vds_deploy.',
+      tags: ['ConPTY Daemons', 'Paramiko SSH/SFTP', 'Docker'],
+    },
+    {
+      title: 'OSINTer & Stealth Web Engine',
+      icon: Layout,
+      color: 'text-[#536DFE]',
+      bg: 'bg-[#536DFE]/10',
+      desc: 'Built-in Playwright Stealth 2.x browser automation, DaData EGRUL/INN lookup, Funstat Telegram intelligence, and WinRT clipboard vision capture (Win+Shift+S).',
+      tags: ['Playwright Stealth 2.x', 'DaData & Funstat', 'WinRT Vision'],
     },
   ];
 
   return (
-    <section id="usecases" className="py-24 bg-slate-50 border-y border-slate-200 overflow-hidden">
+    <section id="usecases" className="py-24 deepx-section-band border-y border-slate-200/80 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <ScrollReveal direction="up" delay={100}>
-            <h2 className="text-3xl sm:text-4xl font-normal text-[#1F1F1F] tracking-tight mb-4">
+            <h2 className="text-3xl sm:text-4xl font-normal text-[#111318] tracking-tight mb-4">
               Designed for every engineering workflow
             </h2>
           </ScrollReveal>
           <ScrollReveal direction="up" delay={200}>
             <TextScrollReveal
-              text="Whether you are scaffolding a new web app or modernizing a legacy system, DeepX adapts to your tech stack via natural language commands."
-              className="text-[#5F6368] text-lg font-normal"
-              highlightWords={['scaffolding', 'modernizing', 'DeepX', 'natural', 'language']}
+              text="Switch between specialized agent profiles (/style coder, universal, osinter) and execution modes (/mode instant, think, plan) without losing context."
+              className="text-[#475569] text-lg font-normal"
+              highlightWords={['coder,', 'universal,', 'osinter)', 'instant,', 'think,', 'plan)']}
             />
           </ScrollReveal>
         </div>
@@ -53,15 +53,18 @@ export const UseCasesSection: React.FC = () => {
             const Icon = c.icon;
             return (
               <ScrollReveal key={i} direction="up" delay={150 * (i + 1)}>
-                <div className="deepx-card p-8 group cursor-pointer hover:-translate-y-1 transition-transform duration-300 h-full flex flex-col justify-between">
+                <div
+                  onClick={() => document.getElementById('terminal')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="deepx-card p-8 group cursor-pointer h-full flex flex-col justify-between"
+                >
                   <div>
-                    <div className={`w-14 h-14 rounded-2xl ${c.bg} flex items-center justify-center mb-6`}>
-                      <Icon className={`w-7 h-7 ${c.color}`} />
+                    <div className={`w-12 h-12 rounded-xl ${c.bg} flex items-center justify-center mb-6 border border-[#536DFE]/15`}>
+                      <Icon className={`w-6 h-6 ${c.color}`} />
                     </div>
-                    <h3 className="text-xl font-medium text-gray-900 mb-3 group-hover:text-[#536DFE] transition-colors">
+                    <h3 className="text-xl font-medium text-[#111318] mb-3 group-hover:text-[#536DFE] transition-colors">
                       {c.title}
                     </h3>
-                    <p className="text-gray-600 text-sm leading-relaxed mb-6">
+                    <p className="text-[#475569] text-sm leading-relaxed mb-6">
                       {c.desc}
                     </p>
                   </div>
@@ -70,15 +73,15 @@ export const UseCasesSection: React.FC = () => {
                       {c.tags.map((t) => (
                         <span
                           key={t}
-                          className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                          className="px-2.5 py-1 rounded-md text-[11px] font-mono font-medium bg-slate-100/90 text-slate-700 border border-slate-200/80"
                         >
                           {t}
                         </span>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2 text-sm font-medium text-[#536DFE] opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                      <span>Explore use case</span>
-                      <ArrowRight className="w-4 h-4" />
+                    <div className="flex items-center gap-2 text-sm font-medium text-[#536DFE]">
+                      <span>Inspect in Terminal Simulator</span>
+                      <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
                     </div>
                   </div>
                 </div>
@@ -89,13 +92,13 @@ export const UseCasesSection: React.FC = () => {
 
         {/* Free Tier Banner */}
         <ScrollReveal direction="up" delay={400}>
-          <div className="mt-16 rounded-3xl bg-white border border-slate-200 p-8 sm:p-12 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
+          <div className="mt-16 deepx-card p-8 sm:p-12 flex flex-col md:flex-row items-center justify-between gap-8">
             <div>
-              <h3 className="text-2xl font-normal text-[#1F1F1F] mb-2">
+              <h3 className="text-2xl font-normal text-[#111318] mb-2">
                 Open Source & Free for Developers
               </h3>
-              <p className="text-[#5F6368]">
-                DeepX is available at no charge under the MIT License. Run it locally with your own API keys.
+              <p className="text-[#475569]">
+                DeepX is available at no charge under the MIT License. Run it locally with zero API keys or token fees — powered by Playwright Stealth 2.x session emulation.
               </p>
             </div>
             <a
