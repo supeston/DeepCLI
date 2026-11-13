@@ -1,4 +1,4 @@
-# DEEPX CLI (`v3.0.0`)
+# DEEPX CLI (`v3.1.0`)
 
 Автономный терминальный агент и workspace-оркестратор на базе DeepSeek (`DeepSeek-V4.1-Flash`). Работает поверх изолированной браузерной сессии `chat.deepseek.com` через Playwright — API-ключ DeepSeek не требуется.
 
@@ -11,17 +11,29 @@
 ╚═════╝ ╚══════╝╚══════╝╚═╝     ╚═╝  ╚═╝
 ```
 
-`v3.0.0`  ·  `DeepSeek-V4.1-Flash (284B / 13B)`  ·  `Zero API-Key Web Bridge`  ·  `Windows / Linux`
+`v3.1.0`  ·  `DeepSeek-V4.1-Flash (284B / 13B)`  ·  `Zero API-Key Web Bridge`  ·  `Windows Terminal / Win32 Console`
 
 ---
 
 ## Быстрый старт
 
-### Windows (рекомендуемый способ)
+### 1. Установка в систему одной командой (Windows)
 
-1. Запустите `start.bat` (или `run_cli.vbs` для открытия в Windows Terminal).
-2. При первом запуске скрипт автоматически найдёт Python 3.10+ (или установит Python 3.11), создаст `.venv`, установит зависимости из `requirements.txt`, скачает Playwright Chromium и откроет окно входа.
-3. Авторизуйтесь в `chat.deepseek.com` — сессия сохранится в `deepx/core/state.json`.
+```powershell
+irm https://raw.githubusercontent.com/supeston/DeepCLI/main/install.ps1 | iex
+```
+
+Скрипт устанавливает DEEPX CLI в `%LOCALAPPDATA%\DeepX\app`, настраивает `.venv` и Chromium и закрепляет глобальную команду `deepx` в `PATH`. После установки введите `deepx` в любой папке — агент автоматически переключится в Windows Terminal (если установлен) и закроет прежнее окно классической консоли.
+
+### 2. Локальный запуск через `run_cli.vbs`
+
+1. Клонируйте или распакуйте репозиторий и откройте `run_cli.vbs`.
+2. Лаунчер автоматически найдёт Python 3.10+ (или установит Python 3.11), настроит `.venv`, принудительно откроет Windows Terminal (или классическую консоль на системах до Windows 11 без WT) и запустит интерактивный **Control Hub** с навигацией стрелками (`↑`/`↓`, `Enter`):
+   - запуск агента (`DEEPX AGENT`),
+   - проверка и установка обновлений с GitHub,
+   - проверка и восстановление зависимостей и Chromium,
+   - установка / удаление глобальной команды `deepx`.
+3. При первом запуске агента авторизуйтесь в `chat.deepseek.com` — сессия сохранится в `deepx/core/state.json`.
 
 ### Ручная установка
 
@@ -29,19 +41,30 @@
 git clone https://github.com/supeston/DeepCLI.git
 cd DeepCLI
 python deepx/install.py
-.venv/Scripts/python.exe deepx/deep_cli.py
+deepx
 ```
 
 ### Ключи запуска CLI
 
 ```text
---headful     Открыть окно браузера DeepSeek в видимом режиме
---state PATH  Указать альтернативный путь к state.json
---version     Показать установленную версию и выйти
---update      Проверить обновления на GitHub и установить свежую версию
+--headful        Открыть окно браузера DeepSeek в видимом режиме
+--launcher       Открыть интерактивный TUI-лаунчер DEEPX Control Hub
+--cwd PATH       Задать рабочую директорию сессии
+--state PATH     Указать альтернативный путь к state.json
+--install-cmd    Установить глобальную команду deepx в PATH пользователя
+--uninstall-cmd  Удалить глобальную команду deepx из PATH
+--no-relaunch    Остаться в текущем окне терминала без перехода в Windows Terminal
+--version        Показать установленную версию и выйти
+--update         Проверить обновления на GitHub и установить свежую версию
 ```
 
 ---
+
+## Что нового в v3.1.0
+
+- **▸ Интерактивный VBS-лаунчер (`run_cli.vbs` + `deepx/launcher.py`)**: legacy `start.bat` полностью удалён; `run_cli.vbs` открывает отдельный Rich TUI-лаунчер **CONTROL HUB** с баннером, проверкой обновлений, диагностикой зависимостей, переключением глобальной команды `deepx` и управлением стрелками (`↑`/`↓`).
+- **▸ Системная команда `deepx` и авто-переход в Windows Terminal**: установка одной командой (`install.ps1` или `--install-cmd`) добавляет `deepx` в `PATH`. При вызове из классической консоли (`conhost.exe`) и наличии `wt.exe` сессия автоматически открывается в Windows Terminal с 24-bit TrueColor, сохраняя рабочую директорию и закрывая старое окно.
+- **▸ Мгновенное закрытие без зависаний и стабильная работа в обоих терминалах**: отключён QuickEdit-фриз (`Выбрать DEEPX AGENT`), исправлен Win32 close handler (`SetProcessShutdownParameters` + очистка дочерних процессов), добавлены таймауты закрытия Playwright и демон-потоки ввода — окно закрывается мгновенно без `(Не отвечает)`.
 
 ## Что нового в v3.0.0
 
@@ -144,16 +167,17 @@ DeepCLI/
   deepx/
     agent/      # оркестратор runner.py, промпты, чекпоинты, AST repo_map, автодополнение
     api/        # Playwright-мост к DeepSeek Web (deep_api.py)
-    core/       # конфиг, константы, версионирование и автообновление (version.py, updater.py)
+    core/       # конфиг, константы, версионирование, автообновление, Windows Terminal handoff
     parser/     # потоковый парсер tool calls и аргументов
     tools/      # ФС, grep, ConPTY, Python, браузер, VDS, документы, OSINT, медиа, буфер
     ui/         # баннер Rich, потоковый рендер Markdown, single-line статус, терминал
-    install.py  # установщик окружения и self-check импортов
-    main.py     # CLI entrypoint (--headful, --state, --version, --update)
+    launcher.py # интерактивный Rich TUI-лаунчер Control Hub со стрелочным меню
+    install.py  # установщик окружения, self-check зависимостей и команда deepx
+    main.py     # CLI entrypoint (--launcher, --install-cmd, --version, --update)
   tests/        # unit и live ConPTY тесты
   VERSION       # текущая версия для локальной проверки и автообновления
-  start.bat     # запуск на Windows с автоподготовкой .venv
-  run_cli.vbs   # запуск start.bat в Windows Terminal (110x30)
+  install.ps1   # установка в систему одной командой (Windows)
+  run_cli.vbs   # VBS-лаунчер с принудительным запуском в Windows Terminal
 ```
 
 ---

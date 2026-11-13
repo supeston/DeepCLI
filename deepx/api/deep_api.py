@@ -194,22 +194,22 @@ class DeepAPI:
 
         if context and os.path.exists(self.state_file):
             try:
-                await context.storage_state(path=self.state_file)
+                await asyncio.wait_for(context.storage_state(path=self.state_file), timeout=1.2)
             except Exception:
                 pass
         if context:
             try:
-                await context.close()
+                await asyncio.wait_for(context.close(), timeout=1.2)
             except Exception:
                 pass
         if browser:
             try:
-                await browser.close()
+                await asyncio.wait_for(browser.close(), timeout=1.2)
             except Exception:
                 pass
         if playwright:
             try:
-                await playwright.stop()
+                await asyncio.wait_for(playwright.stop(), timeout=1.2)
             except Exception:
                 pass
 

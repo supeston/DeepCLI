@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import unicodedata
 from pathlib import Path
 
@@ -47,6 +48,9 @@ from typing import Optional
 __all__ = [
     "console",
     "setup_windows_terminal",
+    "disable_quick_edit_mode",
+    "shutdown_child_processes",
+    "is_windows_terminal_session",
     "register_cleanup_callback",
     "read_single_key_confirm",
     "_begin_windows_ctrl_c_key_mode",
@@ -250,6 +254,91 @@ def read_single_key_confirm(prompt_text: str) -> bool:
         _confirm_active = False
 
 
+def is_windows_terminal_session() -> bool:
+    return bool(os.environ.get("WT_SESSION"))
+
+
+def disable_quick_edit_mode() -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        kernel32 = ctypes.windll.kernel32
+        h_in = kernel32.GetStdHandle(-10)
+        if h_in in (-1, 0):
+            return False
+        in_mode = ctypes.c_ulong()
+        if not kernel32.GetConsoleMode(h_in, ctypes.byref(in_mode)):
+            return False
+        # Clear ENABLE_QUICK_EDIT_MODE (0x0040) and ENABLE_MOUSE_INPUT (0x0010), keep ENABLE_EXTENDED_FLAGS (0x0080)
+        desired = (in_mode.value & ~0x0040 & ~0x0010) | 0x0080
+        if desired == in_mode.value:
+            return True
+        return bool(kernel32.SetConsoleMode(h_in, desired))
+    except Exception:
+        return False
+
+
+def shutdown_child_processes(root_pid: Optional[int] = None) -> int:
+    """Terminate all Windows descendant processes cleanly to avoid console-close hangs."""
+    if sys.platform != "win32":
+        return 0
+    target_root = int(root_pid or os.getpid())
+    try:
+        kernel32 = ctypes.windll.kernel32
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", ctypes.c_uint32),
+                ("cntUsage", ctypes.c_uint32),
+                ("th32ProcessID", ctypes.c_uint32),
+                ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", ctypes.c_uint32),
+                ("cntThreads", ctypes.c_uint32),
+                ("th32ParentProcessID", ctypes.c_uint32),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", ctypes.c_uint32),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+        if snapshot in (-1, 0):
+            return 0
+        children_by_parent: dict[int, list[int]] = {}
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while ok:
+                children_by_parent.setdefault(int(entry.th32ParentProcessID), []).append(int(entry.th32ProcessID))
+                ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            kernel32.CloseHandle(snapshot)
+
+        descendants: list[int] = []
+        queue = list(children_by_parent.get(target_root, ()))
+        seen = {target_root}
+        while queue:
+            pid = queue.pop(0)
+            if pid in seen or pid <= 0:
+                continue
+            seen.add(pid)
+            descendants.append(pid)
+            queue.extend(children_by_parent.get(pid, ()))
+
+        terminated = 0
+        for pid in reversed(descendants):
+            handle = kernel32.OpenProcess(0x0001, False, pid)
+            if handle:
+                try:
+                    if kernel32.TerminateProcess(handle, 1):
+                        terminated += 1
+                finally:
+                    kernel32.CloseHandle(handle)
+        return terminated
+    except Exception:
+        return 0
+
+
 def setup_windows_terminal(cols: int = 140, lines: int = 40, buffer_lines: int = 9999):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -260,58 +349,73 @@ def setup_windows_terminal(cols: int = 140, lines: int = 40, buffer_lines: int =
         try:
             kernel32 = ctypes.windll.kernel32
             hOut = kernel32.GetStdHandle(-11)
-            hIn = kernel32.GetStdHandle(-10)
-            if hOut != -1 and hOut != 0:
-                mode = ctypes.c_ulong()
-                if kernel32.GetConsoleMode(hOut, ctypes.byref(mode)):
-                    mode.value |= 0x0004
-                    kernel32.SetConsoleMode(hOut, mode)
+            hErr = kernel32.GetStdHandle(-12)
+            for h_stream in (hOut, hErr):
+                if h_stream not in (-1, 0):
+                    mode = ctypes.c_ulong()
+                    if kernel32.GetConsoleMode(h_stream, ctypes.byref(mode)):
+                        mode.value |= 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+                        kernel32.SetConsoleMode(h_stream, mode)
 
-                if hIn != -1 and hIn != 0:
-                    in_mode = ctypes.c_ulong()
-                    if kernel32.GetConsoleMode(hIn, ctypes.byref(in_mode)):
-                        in_mode.value |= 0x0010
-                        kernel32.SetConsoleMode(hIn, in_mode)
+            disable_quick_edit_mode()
 
-                if sys.stdout.isatty() and not os.environ.get("WT_SESSION"):
-                    class COORD(ctypes.Structure):
-                        _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
+            if hOut not in (-1, 0) and sys.stdout.isatty() and not os.environ.get("WT_SESSION"):
+                class COORD(ctypes.Structure):
+                    _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
 
-                    class SMALL_RECT(ctypes.Structure):
-                        _fields_ = [
-                            ("Left", ctypes.c_short),
-                            ("Top", ctypes.c_short),
-                            ("Right", ctypes.c_short),
-                            ("Bottom", ctypes.c_short),
-                        ]
+                class SMALL_RECT(ctypes.Structure):
+                    _fields_ = [
+                        ("Left", ctypes.c_short),
+                        ("Top", ctypes.c_short),
+                        ("Right", ctypes.c_short),
+                        ("Bottom", ctypes.c_short),
+                    ]
 
-                    coord = COORD(cols, buffer_lines)
-                    kernel32.SetConsoleScreenBufferSize(hOut, coord)
-                    rect = SMALL_RECT(0, 0, cols - 1, lines - 1)
-                    kernel32.SetConsoleWindowInfo(hOut, True, ctypes.byref(rect))
+                kernel32.GetLargestConsoleWindowSize.restype = COORD
+                largest = kernel32.GetLargestConsoleWindowSize(hOut)
+                target_cols = max(80, min(int(cols), int(largest.X))) if largest.X > 0 else int(cols)
+                target_lines = max(24, min(int(lines), int(largest.Y))) if largest.Y > 0 else int(lines)
+                coord = COORD(target_cols, max(int(buffer_lines), target_lines))
+                kernel32.SetConsoleScreenBufferSize(hOut, coord)
+                rect = SMALL_RECT(0, 0, target_cols - 1, target_lines - 1)
+                kernel32.SetConsoleWindowInfo(hOut, True, ctypes.byref(rect))
 
-            PHANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
+            try:
+                kernel32.SetProcessShutdownParameters(0x3FF, 0)
+            except Exception:
+                pass
+
+            PHANDLER_ROUTINE = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_ulong)
 
             def on_console_close(ctrl_type):
                 if ctrl_type in (2, 5, 6):  # CTRL_CLOSE_EVENT, LOGOFF, SHUTDOWN
-                    for fn in list(_cleanup_callbacks):
-                        try:
-                            fn()
-                        except Exception:
-                            pass
+                    def _run_cleanups():
+                        for fn in list(_cleanup_callbacks):
+                            try:
+                                fn()
+                            except Exception:
+                                pass
+
+                    worker = threading.Thread(target=_run_cleanups, daemon=True)
+                    worker.start()
+                    worker.join(timeout=0.25)
+                    shutdown_child_processes()
                     os._exit(0)
-                return False
+                    return 1
+                return 0
 
             global _console_ctrl_handler
             _console_ctrl_handler = PHANDLER_ROUTINE(on_console_close)
             kernel32.SetConsoleCtrlHandler(_console_ctrl_handler, True)
 
         except Exception:
-            try:
-                if sys.stdout.isatty() and not os.environ.get("WT_SESSION"):
-                    os.system(f"mode con: cols={cols}")
-            except Exception:
-                pass
+            pass
 
 
-console = Console()
+def _create_console() -> Console:
+    if is_windows_terminal_session():
+        return Console(color_system="truecolor", soft_wrap=False)
+    return Console()
+
+
+console = _create_console()

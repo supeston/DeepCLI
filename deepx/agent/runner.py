@@ -6,6 +6,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 from typing import Callable, Optional
 
 import pyperclip
@@ -63,6 +64,7 @@ from deepx.ui.terminal import (
     _restore_windows_console_mode,
     _wait_for_windows_control_key,
     console,
+    disable_quick_edit_mode,
     read_single_key_confirm,
     register_cleanup_callback,
 )
@@ -82,6 +84,29 @@ RECENT_STEPS_FULL = 4
 
 def _normalize_mode_name(value: str) -> Optional[str]:
     return _MODE_ALIASES.get((value or "").strip().lower())
+
+
+async def _run_in_daemon_thread(fn: Callable):
+    """Run blocking console I/O in a daemon thread so exit never waits on ReadConsoleW."""
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def _worker():
+        try:
+            result = fn()
+        except BaseException as exc:
+            if not loop.is_closed():
+                loop.call_soon_threadsafe(
+                    lambda: not future.done() and future.set_exception(exc)
+                )
+        else:
+            if not loop.is_closed():
+                loop.call_soon_threadsafe(
+                    lambda: not future.done() and future.set_result(result)
+                )
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return await future
 
 
 def _extract_waiting_for_input(tool_outputs: list) -> tuple[Optional[dict], list[str]]:
@@ -440,10 +465,11 @@ class DeepCLIApp:
         try:
             async with DeepAPI(state_file=self.state_file, headless=self.headless) as api:
                 while True:
+                    disable_quick_edit_mode()
                     prompt_msg = self._build_prompt()
                     try:
-                        user_input = await asyncio.get_running_loop().run_in_executor(
-                            None, lambda: self.session.prompt(prompt_msg)
+                        user_input = await _run_in_daemon_thread(
+                            lambda: self.session.prompt(prompt_msg)
                         )
                         user_input = user_input.strip()
                     except KeyboardInterrupt:
@@ -480,18 +506,27 @@ class DeepCLIApp:
         finally:
             if self._active_status is not None:
                 try:
-                    await self._active_status.stop()
+                    await asyncio.wait_for(self._active_status.stop(), timeout=1.0)
                 except Exception:
                     pass
                 self._active_status = None
-            await self.tools.close_background_tasks()
-            await self.tools.close_browser()
-            self.tools.vds_pool.close_all()
+            try:
+                await asyncio.wait_for(self.tools.close_background_tasks(), timeout=2.0)
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(self.tools.close_browser(), timeout=2.5)
+            except Exception:
+                pass
+            try:
+                self.tools.vds_pool.close_all()
+            except Exception:
+                pass
 
     async def confirm_exit(self) -> bool:
         try:
-            answer = await asyncio.get_running_loop().run_in_executor(
-                None,
+            disable_quick_edit_mode()
+            answer = await _run_in_daemon_thread(
                 lambda: self.session.prompt("Do you really want to exit? [y/N] "),
             )
         except (EOFError, KeyboardInterrupt):

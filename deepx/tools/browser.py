@@ -113,19 +113,36 @@ class BrowserToolsMixin:
         page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
 
     async def close_browser(self):
-        if self.browser_context:
-            try:
-                await self.browser_context.storage_state(path=self.browser_state_file)
-            except Exception:
-                pass
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
+        browser_context = self.browser_context
+        browser = self.browser
+        playwright = self.playwright
         self.page = None
         self.browser_context = None
         self.browser = None
         self.playwright = None
+
+        if browser_context:
+            try:
+                await asyncio.wait_for(
+                    browser_context.storage_state(path=self.browser_state_file),
+                    timeout=1.2,
+                )
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(browser_context.close(), timeout=1.2)
+            except Exception:
+                pass
+        if browser:
+            try:
+                await asyncio.wait_for(browser.close(), timeout=1.2)
+            except Exception:
+                pass
+        if playwright:
+            try:
+                await asyncio.wait_for(playwright.stop(), timeout=1.2)
+            except Exception:
+                pass
 
     async def _browser_locator(self, args: dict):
                                                                              

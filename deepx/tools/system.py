@@ -79,8 +79,8 @@ class SystemToolsMixin:
         protected_targets = [
             os.path.realpath(os.path.join(app_root, "deepx")),
             os.path.realpath(os.path.join(app_root, ".env")),
-            os.path.realpath(os.path.join(app_root, "start.bat")),
             os.path.realpath(os.path.join(app_root, "run_cli.vbs")),
+            os.path.realpath(os.path.join(app_root, "install.ps1")),
             os.path.realpath(os.path.join(app_root, "requirements.txt")),
             *sorted(getattr(self, "extra_protected", set())),
         ]

@@ -649,3 +649,144 @@ def test_render_banner_help_status_and_prompt_formatting(monkeypatch, tmp_path):
     assert "".join(text for _cls, text in app._build_prompt()) == "[think] › "
     app.mode = "plan"
     assert "".join(text for _cls, text in app._build_prompt()) == "[plan] › "
+
+
+def test_windows_launch_wt_handoff_gating(monkeypatch, tmp_path):
+    from deepx.core import windows_launch as wl
+
+    monkeypatch.delenv("DEEPX_NO_WT_RELAUNCH", raising=False)
+    monkeypatch.setattr(wl, "is_standalone_classic_console", lambda: True)
+    monkeypatch.setattr(wl, "find_windows_terminal", lambda: r"C:\Apps\wt.exe")
+    monkeypatch.setattr(wl, "is_windows_11", lambda: False)
+
+    assert wl.should_relaunch_in_windows_terminal([]) is True
+    assert wl.should_relaunch_in_windows_terminal(["--headful"]) is True
+    assert wl.should_relaunch_in_windows_terminal(["--version"]) is False
+    assert wl.should_relaunch_in_windows_terminal(["--update"]) is False
+    assert wl.should_relaunch_in_windows_terminal(["--install-cmd"]) is False
+    assert wl.should_relaunch_in_windows_terminal(["--in-wt"]) is False
+    assert wl.should_relaunch_in_windows_terminal(["--no-relaunch"]) is False
+
+    space_dir = tmp_path / "dir with spaces"
+    space_dir.mkdir()
+    cmd = wl.build_wt_command(
+        [str(space_dir / "python.exe"), "-u", "launcher.py"],
+        cwd=str(space_dir),
+        title="DEEPX LAUNCHER",
+        wt_path=r"C:\Apps\wt.exe",
+    )
+    assert cmd[0] == r"C:\Apps\wt.exe"
+    assert "--title" in cmd and "DEEPX LAUNCHER" in cmd
+    assert "-d" in cmd and str(space_dir) in cmd
+    assert cmd[-1] == "--in-wt"
+
+    spawned = {}
+    closed = {"count": 0}
+
+    def fake_popen(popen_cmd, **kwargs):
+        spawned["cmd"] = popen_cmd
+        return SimpleNamespace(pid=4321)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(wl, "close_classic_console_window", lambda: closed.__setitem__("count", closed["count"] + 1) or True)
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    ok = wl.relaunch_in_windows_terminal(
+        [str(space_dir / "python.exe"), "deepx/main.py"],
+        cwd=str(space_dir),
+        close_parent=True,
+    )
+    assert ok is True
+    assert closed["count"] == 1
+    assert "--in-wt" in spawned["cmd"]
+
+    def broken_popen(*_a, **_kw):
+        raise OSError("wt blocked")
+
+    monkeypatch.setattr(subprocess, "Popen", broken_popen)
+    assert wl.relaunch_in_windows_terminal(["python.exe"], cwd=str(space_dir)) is False
+
+
+def test_install_and_uninstall_system_command(tmp_path):
+    from deepx.core.windows_launch import (
+        install_system_command,
+        is_system_command_installed,
+        uninstall_system_command,
+    )
+
+    app_root = tmp_path / "DeepX Space App"
+    venv_bin = app_root / ".venv" / ("Scripts" if sys.platform == "win32" else "bin")
+    venv_bin.mkdir(parents=True)
+    py_name = "python.exe" if sys.platform == "win32" else "python"
+    (venv_bin / py_name).write_text("", encoding="utf-8")
+
+    bin_dir = tmp_path / "local bin"
+    ok, _msg = install_system_command(project_root=app_root, bin_dir=bin_dir, update_registry=False)
+    assert ok is True
+    assert is_system_command_installed(project_root=app_root, bin_dir=bin_dir) is True
+
+    cmd_text = (bin_dir / "deepx.cmd").read_text(encoding="utf-8")
+    ps1_text = (bin_dir / "deepx.ps1").read_text(encoding="utf-8")
+    assert str(app_root.resolve()) in cmd_text
+    assert "--cwd" in cmd_text and "deepx.main" in cmd_text
+    assert "deepx.main" in ps1_text and "--cwd" in ps1_text
+
+    ok_rm, _msg_rm = uninstall_system_command(bin_dir=bin_dir, update_registry=False)
+    assert ok_rm is True
+    assert is_system_command_installed(project_root=app_root, bin_dir=bin_dir) is False
+
+
+def test_launcher_renderable_distinct_banner_and_navigation(tmp_path):
+    from rich.console import Console
+    from deepx.core.version import UpdateInfo
+    from deepx.launcher import LauncherSnapshot, build_launcher_renderable
+
+    snap = LauncherSnapshot(
+        local_version="3.1.0",
+        update_info=UpdateInfo("3.1.0", "3.2.0", True, "raw"),
+        venv_ready=True,
+        cmd_installed=False,
+        terminal_label="Windows Terminal (TrueColor)",
+        wt_available=True,
+        app_root=tmp_path,
+        status_note="Dependencies verified",
+    )
+
+    cap = Console(record=True, width=100, force_terminal=False, color_system=None)
+    cap.print(build_launcher_renderable(snap, selected_index=1, term_width=100))
+    rendered = cap.export_text()
+
+    assert "CONTROL HUB" in rendered
+    assert "LAUNCHER EDITION" in rendered
+    assert "update 3.2.0" in rendered
+    assert "Launch DEEPX Agent" in rendered
+    assert "Check & Install Updates" in rendered
+    assert "Verify Dependencies" in rendered
+    assert "Install 'deepx' Command" in rendered
+    assert "Exit Launcher" in rendered
+    assert "▸" in rendered
+    assert "DeepSeek-V4.1-Flash" not in rendered
+    assert not _contains_emoji(rendered)
+
+
+def test_deep_api_close_bounded_timeout_and_terminal_helpers(monkeypatch):
+    import time
+    from deepx.api.deep_api import DeepAPI
+    from deepx.ui.terminal import disable_quick_edit_mode, shutdown_child_processes
+
+    class _HungBrowser:
+        async def close(self):
+            await asyncio.sleep(10)
+
+    api = DeepAPI(headless=True)
+    api.browser = _HungBrowser()
+
+    started = time.monotonic()
+    asyncio.run(api.close())
+    elapsed = time.monotonic() - started
+    assert elapsed < 3.0
+    assert api.browser is None
+
+    # Smoke-check Win32 input & child cleanup helpers never raise
+    disable_quick_edit_mode()
+    assert shutdown_child_processes(root_pid=99999999) == 0

@@ -107,9 +107,12 @@ SELF_PROTECTED_FILES = {
     "deep_api.py",
     "dadata_osint.py",
     "funstat_osint.py",
+    "install.ps1",
+    "launcher.py",
     "run_cli.vbs",
     "tool_parser.py",
     "vds_profiles.json",
+    "windows_launch.py",
 }
 
 SELF_PROTECTED_PREFIXES = ("system_prompt", ".deepx", ".env", "state.json")

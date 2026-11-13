@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 from typing import Optional
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 GITHUB_REPO = "supeston/DeepCLI"
 GITHUB_BRANCH = "main"

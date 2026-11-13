@@ -107,6 +107,29 @@ def _fetch_remote_version(
     return None, ""
 
 
+def get_cached_update_info(
+    project_root: Optional[Path] = None,
+    cache_path: Optional[Path] = None,
+) -> Optional[UpdateInfo]:
+    """Read fresh cached UpdateInfo from disk without performing network requests."""
+    root = Path(project_root) if project_root is not None else get_project_root()
+    current = get_local_version(root)
+    cache_file = Path(cache_path) if cache_path is not None else _default_cache_path(root)
+    cached = _read_cache(cache_file)
+    if not cached:
+        return None
+    checked_at = float(cached.get("checked_at") or 0.0)
+    cached_latest = str(cached.get("latest_version") or "").strip().lstrip("vV")
+    if not cached_latest or (time.time() - checked_at) > UPDATE_CACHE_TTL_SECONDS:
+        return None
+    return UpdateInfo(
+        current_version=current,
+        latest_version=cached_latest,
+        has_update=is_newer_version(cached_latest, current),
+        source="cache",
+    )
+
+
 def check_for_updates(
     force_refresh: bool = False,
     timeout: float = 1.8,
@@ -120,17 +143,9 @@ def check_for_updates(
     cache_file = Path(cache_path) if cache_path is not None else _default_cache_path(root)
 
     if not force_refresh:
-        cached = _read_cache(cache_file)
-        if cached:
-            checked_at = float(cached.get("checked_at") or 0.0)
-            cached_latest = str(cached.get("latest_version") or "").strip().lstrip("vV")
-            if cached_latest and (time.time() - checked_at) <= UPDATE_CACHE_TTL_SECONDS:
-                return UpdateInfo(
-                    current_version=current,
-                    latest_version=cached_latest,
-                    has_update=is_newer_version(cached_latest, current),
-                    source="cache",
-                )
+        cached_info = get_cached_update_info(project_root=root, cache_path=cache_file)
+        if cached_info is not None:
+            return cached_info
 
     remote_version, source = _fetch_remote_version(timeout=timeout, fetch_text_fn=fetch_text_fn)
     if remote_version:
