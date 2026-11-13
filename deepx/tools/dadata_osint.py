@@ -20,31 +20,43 @@ class DadataOSINTTool:
         allow_paid = (            os.getenv("DADATA_ALLOW_PAID")            or dotenv.get("DADATA_ALLOW_PAID", "false")        )
         self.allow_paid = str(allow_paid).strip().lower() in {"1", "true", "yes", "on"}
     @classmethod
+    def _is_placeholder(cls, val: str) -> bool:
+        low = str(val or "").strip().lower()
+        return (
+            not low
+            or low.startswith(("your_", "<", "insert_", "replace_", "example_"))
+            or low in {"changeme", "none", "null", "xxx", "..."}
+        )
+
+    @classmethod
     def _read_dotenv(cls) -> dict[str, str]:
         values: dict[str, str] = {}
         candidates = [
+            Path.cwd() / ".env",
+            Path.cwd() / "deepx" / "core" / ".env",
             Path(__file__).resolve().parents[1] / "core" / ".env",
             Path(__file__).resolve().parents[2] / ".env",
-            Path.cwd() / "deepx" / "core" / ".env",
-            Path.cwd() / ".env",
         ]
         for env_file in candidates:
-            if env_file.is_file():
-                try:
-                    lines = env_file.read_text(encoding="utf-8-sig").splitlines()
-                    for raw_line in lines:
-                        line = raw_line.strip()
-                        if not line or line.startswith("#") or "=" not in line:
-                            continue
-                        name, value = line.split("=", 1)
-                        value = value.strip()
-                        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-                            value = value[1:-1]
-                        values[name.strip()] = value
-                    if values:
-                        return values
-                except OSError:
-                    continue
+            if not env_file.is_file():
+                continue
+            try:
+                lines = env_file.read_text(encoding="utf-8-sig").splitlines()
+                for raw_line in lines:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    name, value = line.split("=", 1)
+                    key = name.strip()
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                        value = value[1:-1]
+                    if cls._is_placeholder(value):
+                        continue
+                    if not values.get(key):
+                        values[key] = value
+            except OSError:
+                continue
         return values
     def _redact(self, value: Any) -> Any:
         if isinstance(value, dict):
@@ -86,7 +98,7 @@ class DadataOSINTTool:
         try:
             with urlopen(request, timeout=20) as response:
                 content = response.read()
-                content_type = response.headers.get("Content-Type", "")
+                content_type = (response.headers.get("Content-Type") or "").lower()
                 if "json" in content_type:
                     return json.loads(content.decode("utf-8"))
                 return content
@@ -128,15 +140,32 @@ class DadataOSINTTool:
         if action == "address" and "locations" not in payload:
             payload["locations"] = [{"country": "*"}]
         return payload
-    async def _logo_by_domain(self, query: Any) -> str:
+    async def _logo_by_domain(
+        self,
+        query: Any,
+        output_dir: str | None = None,
+        protected_checker: Any = None,
+    ) -> str:
         domain = str(query or "").strip().lower()
         domain = re.sub(r"^https?://", "", domain).split("/", 1)[0].split(":", 1)[0]
-        if not re.fullmatch(            r"(?:[a-z0-9а-яё](?:[a-z0-9а-яё-]{0,61}[a-z0-9а-яё])?\.)+"            r"[a-zа-яё]{2,63}",            domain,            flags=re.IGNORECASE,        ):
+        if not re.fullmatch(
+            r"(?:[a-z0-9а-яё](?:[a-z0-9а-яё-]{0,61}[a-z0-9а-яё])?\.)+"
+            r"[a-zа-яё]{2,63}",
+            domain,
+            flags=re.IGNORECASE,
+        ):
             return self._json_error("Provide a valid domain for logo_by_domain.")
         safe_name = re.sub(r"[^a-zA-Z0-9.-]+", "_", domain)
-        target_dir = self.APP_DIR / "dadata_logos"
-        target_dir.mkdir(exist_ok=True)
-        target = target_dir / f"{safe_name}.png"
+        target_dir = Path(output_dir).resolve() if output_dir else (Path.cwd() / "dadata_logos").resolve()
+        target = (target_dir / f"{safe_name}.png").resolve()
+        if callable(protected_checker) and (
+            protected_checker(str(target_dir)) or protected_checker(str(target))
+        ):
+            return self._json_error(
+                f"Access denied: destination '{target_dir}' belongs to protected DEEPX files.",
+                "logo_by_domain",
+            )
+        target_dir.mkdir(parents=True, exist_ok=True)
         url = f"https://cdn.dadata.ru/logo/{domain}?{urlencode({'token': self.api_key})}"
         try:
             content = await asyncio.to_thread(                self._request_sync,                url,                {"Accept": "image/*", "User-Agent": "DEEPX-DaData-OSINT/1.0"},                None,                "GET",            )
@@ -151,13 +180,30 @@ class DadataOSINTTool:
         if action:
             result["action"] = action
         return json.dumps(result, ensure_ascii=False, indent=2)
-    async def run(        self,        action: str,        query: Any = None,        lat: Any = None,        lon: Any = None,        count: Any = 10,        options: dict[str, Any] | None = None,    ) -> str:
+    async def run(
+        self,
+        action: str,
+        query: Any = None,
+        lat: Any = None,
+        lon: Any = None,
+        count: Any = 10,
+        options: dict[str, Any] | None = None,
+        output_dir: str | None = None,
+        protected_checker: Any = None,
+    ) -> str:
         action = str(action or "").strip().lower()
         options = options if isinstance(options, dict) else {}
         if not self.api_key:
-            return self._json_error(                "DADATA_API_KEY is not configured in .env.", action            )
+            return self._json_error(
+                "DADATA_API_KEY is not configured in .env.", action
+            )
         if action == "logo_by_domain":
-            return await self._logo_by_domain(query)
+            chosen_dir = output_dir or options.get("output_dir")
+            return await self._logo_by_domain(
+                query,
+                output_dir=chosen_dir,
+                protected_checker=protected_checker,
+            )
         if action not in self.ACTIONS:
             return self._json_error(                "Unsupported action. Available actions: "                + ", ".join(sorted((*self.ACTIONS, "logo_by_domain"))),                action,            )
         family, resource, paid = self.ACTIONS[action]

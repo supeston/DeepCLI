@@ -1,51 +1,18 @@
-import asyncio
-import concurrent.futures
-import ctypes
-import difflib
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
 import json
 import os
-import py_compile
-import re
-import shutil
-import signal
-import subprocess
-import sys
-import textwrap
-import unicodedata
-from pathlib import Path
-
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
-from deepx.tools.dadata_osint import DadataOSINTTool
-from deepx.tools.funstat_osint import FunstatOSINTTool
 
                                                                                 
                     
                                                                                 
 
-from deepx.core.constants import *
-from deepx.core.config import *
-from deepx.ui.markup import *
-from deepx.ui.terminal import console
-
 class ProjectToolsMixin:
+    def _check_memory_protected(self):
+        checker = getattr(self, "is_protected", None)
+        if getattr(self, "protect_self", False) and callable(checker) and checker(self.project_memory_file):
+            deny_fn = getattr(self, "_deny", None)
+            return deny_fn(self.project_memory_file) if callable(deny_fn) else "[Access denied]"
+        return None
     def _load_project_memory(self) -> dict:
                                                                            
         default = {
@@ -93,7 +60,9 @@ class ProjectToolsMixin:
         return [str(item).strip() for item in value if str(item).strip()]
 
     def project_memory(self, action: str, args: dict) -> str:
-                                                                               
+        denied = self._check_memory_protected()
+        if denied:
+            return denied
         action = (action or "get").strip().lower()
         try:
             memory = self._load_project_memory()

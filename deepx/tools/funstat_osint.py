@@ -13,7 +13,10 @@ class FunstatOSINTTool:
     FALLBACK_FREE = {        "stats_min",        "reputation",        "messages_count",        "groups_count",    }
     _pricing_cache: tuple[float, dict[str, Any]] | None = None
     def __init__(self, token: str | None = None):
-        self.token = (            token            or os.getenv("FUNSTAT_API_TOKEN", "")            or self._token_from_dotenv()        ).strip()
+        env_tok = os.getenv("FUNSTAT_API_TOKEN", "").strip()
+        if env_tok in ("ВСТАВЬТЕ_СЮДА_ТОКЕН", "your_funstat_api_token_here"):
+            env_tok = ""
+        self.token = (token or env_tok or self._token_from_dotenv()).strip()
     @staticmethod
     def _token_from_dotenv() -> str:
         candidates = [
@@ -184,7 +187,12 @@ class FunstatOSINTTool:
                 activity = "сообщения не обнаружены"
         else:
             activity = "недостаточно данных"
-        lines = [            f"# Funstat / Telelog: бесплатный OSINT-отчёт",            "",            f"- **Telegram ID:** `{telegram_id}`",            *(                [f"- **Запрошенный username:** `@{requested_username}`"]                if requested_username                else []            ),            f"- **Режим:** `{action}`",            (                "- **Политика расходов:** одно разрешение username в ID (`≈0,1 💠`), "                "после него только маршруты `0 💠`"                if requested_username                else "- **Политика расходов:** только маршруты с текущей стоимостью `0 💠`"            ),            "",            "## Профиль",            "",            "| Поле | Значение |",            "| --- | --- |",            f"| Имя в базе | {self._cell(full_name)} |",            f"| Username | {self._cell(stats.get('username') or requested_username)} |",            f"| Premium | {self._cell(stats.get('has_premium'))} |",            f"| Бот | {self._cell(stats.get('is_bot'))} |",            f"| Активный аккаунт | {self._cell(stats.get('is_active'))} |",            f"| Первое сообщение | {self._cell(stats.get('first_msg_date'))} |",            f"| Последнее сообщение | {self._cell(stats.get('last_msg_date'))} |",            "",            "## Активность",            "",            "| Метрика | Значение |",            "| --- | --- |",            f"| Сообщений | {self._cell(total_messages)} |",            f"| Групп | {self._cell(total_groups)} |",            f"| Сообщений в группах | {self._cell(stats.get('msg_in_groups_count'))} |",            f"| Групп с правами администратора | {self._cell(stats.get('adm_in_groups'))} |",            f"| Зафиксировано имён | {self._cell(stats.get('names_count'))} |",            f"| Зафиксировано username | {self._cell(stats.get('usernames_count'))} |",            f"| Реплаи | {self._cell(stats.get('reply_percent'))} |",            f"| Медиа | {self._cell(stats.get('media_percent'))} |",            f"| Голосовые | {self._cell(stats.get('voice_count'))} |",            f"| Кружки | {self._cell(stats.get('circle_count'))} |",            "",            "## Репутация",            "",            "| Метрика | Значение |",            "| --- | --- |",            f"| Уровень | {self._cell(reputation.get('reputation_name'))} |",            f"| Голосов | {self._cell(reputation.get('num_votes'))} |",            f"| Положительных | {self._cell(reputation.get('positive_count'))} |",            f"| Отрицательных | {self._cell(reputation.get('negative_count'))} |",            f"| Отзывов | {self._cell(reputation.get('review_count'))} |",            f"| Байесовская оценка | {self._cell(reputation.get('bayesian_average'))} |",            "",            "## Аналитическая сводка",            "",            f"- Наблюдаемая активность по объёму сообщений: **{activity}**.",        ]
+        lines = [            f"# Funstat / Telelog: бесплатный OSINT-отчёт",            "",            f"- **Telegram ID:** `{telegram_id}`",            *(                [f"- **Запрошенный username:** `@{requested_username}`"]                if requested_username                else []            ),            f"- **Режим:** `{action}`",            (
+                "- **Политика расходов:** одно разрешение username в ID (`≈0,1 крист.`), "
+                "после него только маршруты `0 крист.`"
+                if requested_username
+                else "- **Политика расходов:** только маршруты с текущей стоимостью `0 крист.`"
+            ),            "",            "## Профиль",            "",            "| Поле | Значение |",            "| --- | --- |",            f"| Имя в базе | {self._cell(full_name)} |",            f"| Username | {self._cell(stats.get('username') or requested_username)} |",            f"| Premium | {self._cell(stats.get('has_premium'))} |",            f"| Бот | {self._cell(stats.get('is_bot'))} |",            f"| Активный аккаунт | {self._cell(stats.get('is_active'))} |",            f"| Первое сообщение | {self._cell(stats.get('first_msg_date'))} |",            f"| Последнее сообщение | {self._cell(stats.get('last_msg_date'))} |",            "",            "## Активность",            "",            "| Метрика | Значение |",            "| --- | --- |",            f"| Сообщений | {self._cell(total_messages)} |",            f"| Групп | {self._cell(total_groups)} |",            f"| Сообщений в группах | {self._cell(stats.get('msg_in_groups_count'))} |",            f"| Групп с правами администратора | {self._cell(stats.get('adm_in_groups'))} |",            f"| Зафиксировано имён | {self._cell(stats.get('names_count'))} |",            f"| Зафиксировано username | {self._cell(stats.get('usernames_count'))} |",            f"| Реплаи | {self._cell(stats.get('reply_percent'))} |",            f"| Медиа | {self._cell(stats.get('media_percent'))} |",            f"| Голосовые | {self._cell(stats.get('voice_count'))} |",            f"| Кружки | {self._cell(stats.get('circle_count'))} |",            "",            "## Репутация",            "",            "| Метрика | Значение |",            "| --- | --- |",            f"| Уровень | {self._cell(reputation.get('reputation_name'))} |",            f"| Голосов | {self._cell(reputation.get('num_votes'))} |",            f"| Положительных | {self._cell(reputation.get('positive_count'))} |",            f"| Отрицательных | {self._cell(reputation.get('negative_count'))} |",            f"| Отзывов | {self._cell(reputation.get('review_count'))} |",            f"| Байесовская оценка | {self._cell(reputation.get('bayesian_average'))} |",            "",            "## Аналитическая сводка",            "",            f"- Наблюдаемая активность по объёму сообщений: **{activity}**.",        ]
         if word_frequency:
             lines.extend([                "",                "## Частота слов",                "",                f"Анализ по доступной выборке из {len(message_rows)} сообщений:",                "",                "| Слово | Количество |",                "| --- | ---: |",                *[                    f"| {self._cell(word)} | {count} |"                    for word, count in word_frequency                ],            ])
         if stickers:
@@ -201,16 +209,45 @@ class FunstatOSINTTool:
             blocked = [                name                for name, details in pricing.get("methods", {}).items()                if details.get("status") != "free"            ]
         lines.extend([            "",            "## Ограничения бесплатного режима",            "",            (                "- Заблокированные по актуальному Swagger методы: "                + (", ".join(f"`{name}`" for name in blocked) if blocked else "нет")                + "."            ),            "- Методы с неизвестной или ненулевой ценой не вызываются.",            "- Отсутствие записи означает только отсутствие данных в базе Telelog, а не отсутствие факта в реальности.",        ])
         return "\n".join(lines)
-    async def run(        self,        action: str = "free_scan",        telegram_id: Any = None,        username: Any = None,    ) -> str:
+    async def run(
+        self,
+        action: str = "free_scan",
+        telegram_id: Any = None,
+        username: Any = None,
+        allow_paid: bool = True,
+    ) -> str:
         action = str(action or "free_scan").strip().lower()
         if action not in self.ALLOWED_ACTIONS:
-            return json.dumps({                "ok": False,                "error": (                    f"Unsupported action '{action}'. Allowed free-only actions: "                    + ", ".join(sorted(self.ALLOWED_ACTIONS))                ),            }, ensure_ascii=False, indent=2)
+            return json.dumps({
+                "ok": False,
+                "error": (
+                    f"Unsupported action '{action}'. Allowed free-only actions: "
+                    + ", ".join(sorted(self.ALLOWED_ACTIONS))
+                ),
+            }, ensure_ascii=False, indent=2)
         if not self.token:
-            return json.dumps({                "ok": False,                "error": (                    "FUNSTAT_API_TOKEN is not configured. Set it in the environment "                    "before starting DEEPX."                ),            }, ensure_ascii=False, indent=2)
+            return json.dumps({
+                "ok": False,
+                "error": (
+                    "FUNSTAT_API_TOKEN is not configured. Set it in the environment "
+                    "before starting DEEPX."
+                ),
+            }, ensure_ascii=False, indent=2)
         try:
             from funstat_api import AsyncFunstatClient
         except ImportError:
-            return json.dumps({                "ok": False,                "error": "Dependency missing: install it with `python -m pip install funstat-api`.",            }, ensure_ascii=False, indent=2)
+            return json.dumps({
+                "ok": False,
+                "error": "Dependency missing: install it with `python -m pip install funstat-api`.",
+            }, ensure_ascii=False, indent=2)
+        if telegram_id in (None, "") and not allow_paid:
+            return json.dumps({
+                "ok": False,
+                "error": (
+                    "Username resolution consumes 0.1 crystal and paid lookups are disabled "
+                    "(allow_paid=False). Pass a numeric telegram_id or confirm the paid request."
+                ),
+            }, ensure_ascii=False, indent=2)
         pricing = await self._load_pricing()
         method_pricing = pricing.get("methods", {})
         def is_free(method: str) -> bool:

@@ -164,8 +164,10 @@ def perform_health_check(py_exec: Path) -> bool:
     test_script = """
 import sys
 modules = [
-    "rich", "prompt_toolkit", "pyperclip", "requests", "dotenv",
-    "openpyxl", "pandas", "docx", "pptx", "PIL", "pymediainfo", "playwright", "paramiko"
+    "rich", "prompt_toolkit", "pyperclip", "pygments",
+    "requests", "httpx", "bs4", "dotenv", "openpyxl", "pandas",
+    "docx", "pptx", "pypdf", "PIL", "pymediainfo", "playwright",
+    "playwright_stealth", "paramiko", "funstat_api"
 ]
 if sys.platform == "win32":
     modules.extend(["winpty", "winsdk", "win32clipboard"])
@@ -242,9 +244,12 @@ def main():
     log_step(6, "Initializing Configurations & Self-Diagnosis Health Check")
     setup_configurations(project_root)
     healthy = perform_health_check(py_exec)
+    if not healthy:
+        log_error("Health check failed: some required modules could not be imported.")
+        sys.exit(1)
 
     print(f"\n{BOLD}{GREEN}================================================================")
-    print(f"       🎉 DEEPX AGENT INSTALLATION COMPLETED SUCCESSFULLY!       ")
+    print("       DEEPX AGENT INSTALLATION COMPLETED SUCCESSFULLY!")
     print(f"================================================================{RESET}\n")
 
 

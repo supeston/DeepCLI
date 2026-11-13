@@ -1,26 +1,19 @@
 import asyncio
-import concurrent.futures
+import codecs
 import ctypes
-import difflib
 import json
 import os
-import py_compile
 import re
-import shutil
+import shlex
 import signal
 import subprocess
 import sys
 import tempfile
-import textwrap
-import unicodedata
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from deepx.core.constants import *
-from deepx.core.config import *
-from deepx.ui.markup import *
-from deepx.ui.terminal import console
+from deepx.core.config import APP_DIR
+from deepx.core.constants import MAX_BACKGROUND_LOG_CHARS, SELF_PROTECTED_FILES, SELF_PROTECTED_PREFIXES
 from deepx.tools.terminal_session import PtySessionManager, WINPTY_AVAILABLE
 
 
@@ -52,6 +45,109 @@ class SystemToolsMixin:
             re.match(r'^(?:"[^"]+\.exe"|\S+\.exe)(?:\s|$)', tail, re.IGNORECASE)
         )
 
+    _PROTECTED_ENV_KEYS = (
+        "FUNSTAT_API_TOKEN",
+        "DADATA_API_KEY",
+        "DADATA_SECRET_KEY",
+        "DADATA_ALLOW_PAID",
+        "DEEPSEEK_TOKEN",
+        "DEEPSEEK_API_KEY",
+        "VDS_HOST",
+        "VDS_USER",
+        "VDS_USERNAME",
+        "VDS_PASSWORD",
+        "VDS_PORT",
+        "VDS_KEY_PATH",
+    )
+
+    def _build_child_env(self) -> Dict[str, str]:
+        child_env = os.environ.copy()
+        child_env.pop("FUNSTAT_API_TOKEN", None)
+        if getattr(self, "protect_self", False):
+            for key in self._PROTECTED_ENV_KEYS:
+                child_env.pop(key, None)
+        child_env["PYTHONIOENCODING"] = "utf-8"
+        child_env["PYTHONUTF8"] = "1"
+        return child_env
+
+    def _run_python_exec_args(self, temp_path: str) -> Tuple[List[str], Optional[str]]:
+        if not getattr(self, "protect_self", False):
+            return [sys.executable, "-X", "utf8", temp_path], None
+
+        app_root = os.path.realpath(os.path.abspath(APP_DIR))
+        venv_root = os.path.realpath(os.path.abspath(sys.prefix))
+        protected_targets = [
+            os.path.realpath(os.path.join(app_root, "deepx")),
+            os.path.realpath(os.path.join(app_root, ".env")),
+            os.path.realpath(os.path.join(app_root, "start.bat")),
+            os.path.realpath(os.path.join(app_root, "run_cli.vbs")),
+            os.path.realpath(os.path.join(app_root, "requirements.txt")),
+            *sorted(getattr(self, "extra_protected", set())),
+        ]
+        guard_payload = {
+            "app_root": app_root,
+            "venv_root": venv_root,
+            "targets": protected_targets,
+            "files": sorted(SELF_PROTECTED_FILES),
+            "prefixes": list(SELF_PROTECTED_PREFIXES),
+            "script": os.path.realpath(os.path.abspath(temp_path)),
+        }
+        guard_code = (
+            "import json, os, sys\n"
+            f"_CFG = json.loads({json.dumps(json.dumps(guard_payload))})\n"
+            "_VENV = os.path.normcase(_CFG['venv_root'])\n"
+            "_APP = os.path.normcase(_CFG['app_root'])\n"
+            "_TARGETS = [os.path.normcase(p) for p in _CFG['targets']]\n"
+            "_FILES = set(_CFG['files'])\n"
+            "_PREF = tuple(_CFG['prefixes'])\n"
+            "_SCRIPT = os.path.normcase(_CFG['script'])\n"
+            "def _is_under(rp, root):\n"
+            "    return rp == root or rp.startswith(root + os.sep)\n"
+            "def _blocked_path(raw):\n"
+            "    try:\n"
+            "        p = os.fspath(raw)\n"
+            "        if isinstance(p, bytes):\n"
+            "            p = p.decode('utf-8', 'ignore')\n"
+            "        rp = os.path.normcase(os.path.realpath(os.path.abspath(p)))\n"
+            "    except Exception:\n"
+            "        return False\n"
+            "    if rp == _SCRIPT:\n"
+            "        return False\n"
+            "    if _is_under(rp, _VENV) and (os.sep + 'lib' + os.sep) in rp:\n"
+            "        return False\n"
+            "    for t in _TARGETS:\n"
+            "        if _is_under(rp, t):\n"
+            "            return True\n"
+            "    if _is_under(rp, _APP):\n"
+            "        base = os.path.basename(rp)\n"
+            "        if base in _FILES or base.startswith(_PREF):\n"
+            "            return True\n"
+            "    return False\n"
+            "def _hook(event, args):\n"
+            "    if event == 'open' and args and isinstance(args[0], (str, bytes, os.PathLike)):\n"
+            "        if _blocked_path(args[0]):\n"
+            "            raise PermissionError('Access denied: protected DEEPX file')\n"
+            "    elif event in ('os.listdir', 'os.scandir', 'os.remove', 'os.unlink', 'os.rmdir', 'os.mkdir', 'os.chdir', 'os.chmod') and args:\n"
+            "        if isinstance(args[0], (str, bytes, os.PathLike)) and _blocked_path(args[0]):\n"
+            "            raise PermissionError('Access denied: protected DEEPX path')\n"
+            "    elif event == 'os.rename' and len(args) >= 2:\n"
+            "        for a in args[:2]:\n"
+            "            if isinstance(a, (str, bytes, os.PathLike)) and _blocked_path(a):\n"
+            "                raise PermissionError('Access denied: protected DEEPX path')\n"
+            "    elif event in ('subprocess.Popen', 'os.system') and args:\n"
+            "        txt = str(args[0]).lower()\n"
+            "        if 'deepx' in txt or any(f in txt for f in _FILES) or any(p in txt for p in _PREF):\n"
+            "            raise PermissionError('Access denied: subprocess referencing DEEPX')\n"
+            "sys.addaudithook(_hook)\n"
+            "with open(_CFG['script'], 'r', encoding='utf-8') as _f:\n"
+            "    _src = _f.read()\n"
+            "exec(compile(_src, _CFG['script'], 'exec'), {'__name__': '__main__', '__file__': _CFG['script']})\n"
+        )
+        fd, guard_path = tempfile.mkstemp(prefix=".deepx-pyguard-", suffix=".py", dir=tempfile.gettempdir())
+        with os.fdopen(fd, "w", encoding="utf-8") as gf:
+            gf.write(guard_code)
+        return [sys.executable, "-X", "utf8", guard_path], guard_path
+
     def run_cmd(self, command: str, inputs: str = None) -> str:
         """Execute command in Windows ConPTY pseudo-terminal with interactive prompt detection."""
         if not command or not str(command).strip():
@@ -66,10 +162,7 @@ class SystemToolsMixin:
         # ConPTY Engine Execution
         if WINPTY_AVAILABLE:
             try:
-                child_env = os.environ.copy()
-                child_env.pop("FUNSTAT_API_TOKEN", None)
-                child_env["PYTHONIOENCODING"] = "utf-8"
-                child_env["PYTHONUTF8"] = "1"
+                child_env = self._build_child_env()
 
                 session, err = self.pty_manager.spawn(
                     command=command,
@@ -93,10 +186,7 @@ class SystemToolsMixin:
             command_to_run = command
             if sys.platform == "win32":
                 command_to_run = f"chcp 65001 >nul & {command}"
-            child_env = os.environ.copy()
-            child_env.pop("FUNSTAT_API_TOKEN", None)
-            child_env["PYTHONIOENCODING"] = "utf-8"
-            child_env["PYTHONUTF8"] = "1"
+            child_env = self._build_child_env()
             res = subprocess.run(
                 command_to_run,
                 shell=True,
@@ -165,17 +255,20 @@ class SystemToolsMixin:
                 "Use a concrete external PID instead.]"
             )
 
-        fd, temp_path = tempfile.mkstemp(suffix=".py", dir=self.cwd)
+        fd, temp_path = tempfile.mkstemp(prefix=".deepx-py-", suffix=".py", dir=tempfile.gettempdir())
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write(code)
 
+        guard_path = None
         try:
-            child_env = os.environ.copy()
-            child_env.pop("FUNSTAT_API_TOKEN", None)
-            child_env["PYTHONIOENCODING"] = "utf-8"
-            child_env["PYTHONUTF8"] = "1"
+            child_env = self._build_child_env()
+            existing_py_path = child_env.get("PYTHONPATH", "")
+            child_env["PYTHONPATH"] = (
+                f"{self.cwd}{os.pathsep}{existing_py_path}" if existing_py_path else self.cwd
+            )
+            exec_args, guard_path = self._run_python_exec_args(temp_path)
             res = subprocess.run(
-                [sys.executable, "-X", "utf8", temp_path],
+                exec_args,
                 cwd=self.cwd,
                 capture_output=True,
                 text=True,
@@ -195,11 +288,12 @@ class SystemToolsMixin:
         except Exception as e:
             return f"[Error executing Python script: {e}]"
         finally:
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
+            for p in (guard_path, temp_path):
+                if p and os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
 
     def _assign_windows_kill_job(self, process) -> Optional[int]:
         if sys.platform != "win32":
@@ -300,13 +394,27 @@ class SystemToolsMixin:
         ], launcher_path
 
     async def _capture_background_stream(self, task_id: str, stream, label: str):
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        label_emitted = False
         while True:
             chunk = await stream.read(4096)
             if not chunk:
+                tail = decoder.decode(b"", final=True)
+                if tail:
+                    task = self.active_tasks.get(task_id)
+                    if task is not None:
+                        if label and not label_emitted:
+                            tail = f"[{label}]\n{tail}"
+                            label_emitted = True
+                        task["log"] += tail
                 break
-            text = chunk.decode("utf-8", errors="replace")
-            if label:
-                text = f"[{label}]\n{text}"
+            text = decoder.decode(chunk, final=False)
+            if not text:
+                continue
+            if label and not label_emitted:
+                prefix = "\n" if (self.active_tasks.get(task_id, {}).get("log") and not self.active_tasks[task_id]["log"].endswith("\n")) else ""
+                text = f"{prefix}[{label}]\n{text}"
+                label_emitted = True
             task = self.active_tasks.get(task_id)
             if task is None:
                 return
@@ -343,10 +451,7 @@ class SystemToolsMixin:
         if kill_guard:
             return f"[Error: {kill_guard}]"
 
-        child_env = os.environ.copy()
-        child_env.pop("FUNSTAT_API_TOKEN", None)
-        child_env["PYTHONIOENCODING"] = "utf-8"
-        child_env["PYTHONUTF8"] = "1"
+        child_env = self._build_child_env()
         launcher_path = None
 
         try:
@@ -423,23 +528,25 @@ class SystemToolsMixin:
         task = self.active_tasks.get(id)
         if not task:
             return f"[Error: Unknown background task '{id}']"
-        if task["ended_at"] is None:
+        ended_at = task.get("ended_at")
+        returncode = task.get("returncode")
+        if ended_at is None:
             status = "running"
-        elif task["returncode"] == 0:
+        elif returncode == 0:
             status = "completed"
         else:
             status = "failed"
         report = [
             f"[Background task status for '{id}']",
-            f"Command: {task['command']}",
-            f"PID: {task['pid']}",
+            f"Command: {task.get('command', task.get('cmd', ''))}",
+            f"PID: {task.get('pid', 'N/A')}",
             f"Status: {status}",
-            f"Started: {task['started_at']}",
+            f"Started: {task.get('started_at', '')}",
         ]
-        if task["ended_at"]:
-            report.append(f"Ended: {task['ended_at']}")
-            report.append(f"Exit Code: {task['returncode']}")
-        report.append(f"Buffered Log Chars: {len(task['log']):,}")
+        if ended_at:
+            report.append(f"Ended: {ended_at}")
+            report.append(f"Exit Code: {returncode}")
+        report.append(f"Buffered Log Chars: {len(task.get('log', '')):,}")
         return "\n".join(report)
 
     def task_log(self, id: str, tail_lines: int = 200) -> str:
@@ -452,14 +559,39 @@ class SystemToolsMixin:
             tail_count = max(1, int(tail_lines))
         except (TypeError, ValueError):
             tail_count = 200
-        lines = task["log"].splitlines()
+        lines = str(task.get("log", "")).splitlines()
         selected = lines[-tail_count:] if lines else []
-        status = "running" if task["ended_at"] is None else "finished"
+        status = "running" if task.get("ended_at") is None else "finished"
         header = (
             f"[Background task log for '{id}' ({status}, showing "
             f"{len(selected)} of {len(lines)} lines)]:\n"
         )
         return header + ("\n".join(selected) if selected else "(No output recorded yet)")
+
+    async def kill_background_cmd(self, id: str) -> str:
+        """Terminate an active background command task started with run_background_cmd."""
+        if not id:
+            return "[Error: kill_background_cmd requires an 'id' argument]"
+        task = self.active_tasks.get(id)
+        if not task:
+            return f"[Error: Unknown background task '{id}']"
+        proc = task.get("process")
+        if not proc or proc.returncode is not None:
+            return f"[OK: Background task '{id}' is already finished (exit code: {task.get('returncode')})]"
+        try:
+            if sys.platform == "win32":
+                proc.kill()
+            else:
+                os.killpg(os.getpgid(task["pid"]), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError) as exc:
+            return f"[Error terminating background task '{id}': {exc}]"
+        watcher = task.get("watcher")
+        if watcher is not None:
+            try:
+                await asyncio.wait_for(watcher, timeout=3.0)
+            except asyncio.TimeoutError:
+                pass
+        return f"[OK: Background task '{id}' (PID {task.get('pid')}) terminated]"
 
     async def close_background_tasks(self):
         """Clean up PTY sessions and background tasks on shutdown."""

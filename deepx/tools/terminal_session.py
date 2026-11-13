@@ -17,18 +17,21 @@ except ImportError:
     WINPTY_AVAILABLE = False
 
 
-ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+ANSI_ESCAPE_RE = re.compile(
+    r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])"
+)
 
 INTERACTIVE_PROMPT_PATTERNS = [
-    re.compile(r"\[[yY]/[nN]\]\s*$", re.MULTILINE),
-    re.compile(r"\([yY]/[nN]\)\s*$", re.MULTILINE),
-    re.compile(r"\[default:\s*[^\]]+\]\s*$", re.MULTILINE),
-    re.compile(r"(?:password|passphrase|username|login|email):\s*$", re.IGNORECASE | re.MULTILINE),
-    re.compile(r"(?:enter|type)\s+[^:\n]+:\s*$", re.IGNORECASE | re.MULTILINE),
-    re.compile(r"(?:select|choose|choice|confirm|continue|overwrite|proceed)\??\s*[:?]\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"\[[yY]/[nN]\][ \t]*[:?]?\s*$", re.MULTILINE),
+    re.compile(r"\([yY]/[nN]\)[ \t]*[:?]?\s*$", re.MULTILINE),
+    re.compile(r"\[default:\s*[^\]]+\][ \t]*[:?]?\s*$", re.MULTILINE),
+    re.compile(r"(?:password|passphrase|username|login|email|pin|otp|code|token)\s*:\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"(?:enter|type)\s+[^:\n]{1,60}:\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"(?:select|choose|choice|confirm|continue|overwrite|proceed|retry|abort)\??\s*[:?]\s*$", re.IGNORECASE | re.MULTILINE),
     re.compile(r"(?:Press any key to continue|Press Enter to continue|Hit Enter)[^\n]*$", re.IGNORECASE | re.MULTILINE),
-    re.compile(r"[?:]\s*$", re.MULTILINE),
-    re.compile(r"(?:[❯›>])\s*$", re.MULTILINE),
+    re.compile(r"^(?:>>>|\.\.\.)\s*$", re.MULTILINE),
+    re.compile(r"^In \[\d+\]:\s*$", re.MULTILINE),
+    re.compile(r"^(?!.*https?://)(?![^\n]*[=&])[^\n]{4,90}\?\s*$", re.MULTILINE),
 ]
 
 
@@ -198,10 +201,12 @@ class PtySessionManager:
         job_handle = self._create_job_object()
 
         if sys.platform == "win32":
+            wrapped_cmd = f"chcp 65001 >nul & {command}"
             spawn_args = [
                 os.environ.get("COMSPEC", "cmd.exe"),
+                "/d",
                 "/c",
-                command,
+                wrapped_cmd,
             ]
         else:
             spawn_args = ["/bin/sh", "-c", command]
@@ -259,7 +264,7 @@ class PtySessionManager:
         self,
         session: PtySession,
         max_duration: float = 180.0,
-        silence_threshold: float = 1.0,
+        silence_threshold: float = 1.5,
     ) -> str:
         """
         Poll session output. Returns:
@@ -318,7 +323,9 @@ class PtySessionManager:
 
             if session.accumulated_clean.strip() and silence_duration >= silence_threshold and had_data_since_idle:
                 is_prompt, prompt_line = detect_interactive_prompt(session.accumulated_clean)
-                if is_prompt or silence_duration >= (silence_threshold * 2.0):
+                raw_ends_incomplete = not session.accumulated_raw.endswith(("\n", "\r"))
+                last_line_len = len(session.accumulated_clean.splitlines()[-1]) if session.accumulated_clean.splitlines() else 0
+                if is_prompt or (raw_ends_incomplete and last_line_len <= 120 and silence_duration >= max(silence_threshold * 8.0, 12.0)):
                     session.status = "WAITING_FOR_INPUT"
                     session.prompt_text = prompt_line or (
                         session.accumulated_clean.splitlines()[-1]

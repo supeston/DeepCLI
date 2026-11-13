@@ -15,14 +15,15 @@ except ImportError:
 
 
 def _format_bytes(size: int) -> str:
-    """Format bytes into a human-readable string (KB, MB, GB)."""
+    """Format bytes into a human-readable string (KB, MB, GB, TB, PB)."""
     if size < 1024:
         return f"{size} B"
-    for unit in ["KB", "MB", "GB", "TB"]:
-        size /= 1024.0
-        if size < 1024.0:
-            return f"{size:.2f} {unit}"
-    return f"{size:.2f} PB"
+    val = float(size)
+    for unit in ["KB", "MB", "GB", "TB", "PB"]:
+        val /= 1024.0
+        if val < 1024.0 or unit == "PB":
+            return f"{val:.2f} {unit}"
+    return f"{val:.2f} PB"
 
 
 def _format_bitrate(bps: Optional[Any]) -> str:
@@ -176,18 +177,28 @@ class MediaInspectorMixin:
                 camera = exif_data.get("Model") or exif_data.get("Make")
                 lens = exif_data.get("LensModel")
                 exposure = exif_data.get("ExposureTime")
-                if exposure and isinstance(exposure, (int, float)):
-                    if exposure < 1 and exposure > 0:
-                        exposure = f"1/{round(1/exposure)}s"
-                    else:
-                        exposure = f"{exposure}s"
+                if exposure is not None:
+                    try:
+                        exp_f = float(exposure)
+                        if 0 < exp_f < 1:
+                            exposure = f"1/{round(1.0 / exp_f)}s"
+                        elif exp_f > 0:
+                            exposure = f"{exp_f:g}s"
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        exposure = str(exposure)
                 fnumber = exif_data.get("FNumber")
-                if fnumber:
-                    fnumber = f"f/{float(fnumber):.1f}"
+                if fnumber is not None:
+                    try:
+                        fnumber = f"f/{float(fnumber):.1f}"
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        fnumber = str(fnumber)
                 iso = exif_data.get("ISOSpeedRatings") or exif_data.get("PhotographicSensitivity")
                 focal_length = exif_data.get("FocalLength")
-                if focal_length:
-                    focal_length = f"{float(focal_length):.1f} mm"
+                if focal_length is not None:
+                    try:
+                        focal_length = f"{float(focal_length):.1f} mm"
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        focal_length = str(focal_length)
                 focal_35mm = exif_data.get("FocalLengthIn35mmFilm")
                 if focal_35mm:
                     focal_35mm = f"{focal_35mm} mm (35mm eq.)"
@@ -304,7 +315,7 @@ class MediaInspectorMixin:
         overall_bitrate = format_info.get("bit_rate")
         container_format = format_info.get("format_long_name") or format_info.get("format_name") or file_ext.lstrip(".")
 
-        report = [f"# 🎬 Media Inspection: `{os.path.basename(path)}`\n"]
+        report = [f"# Media Inspection: `{os.path.basename(path)}`\n"]
         report.append(f"- **File Path:** `{abs_path}`")
         report.append(f"- **Media Category:** **{media_type.upper()}**")
         report.append(f"- **File Size:** {file_size_str} ({file_size_bytes:,} bytes)")
@@ -318,9 +329,10 @@ class MediaInspectorMixin:
         # --- VIDEO STREAMS ---
         if ffprobe_data:
             video_streams = [s for s in ffprobe_data.get("streams", []) if s.get("codec_type") == "video"]
-            main_videos = [s for s in video_streams if s.get("disposition", {}).get("attached_pic", 0) == 0] or video_streams
+            cover_streams = [s for s in video_streams if s.get("disposition", {}).get("attached_pic", 0) == 1]
+            main_videos = [s for s in video_streams if s.get("disposition", {}).get("attached_pic", 0) == 0]
             if main_videos and media_type != "image":
-                report.append("\n## 📹 Video Stream(s)")
+                report.append("\n## Video Stream(s)")
                 for idx, vs in enumerate(main_videos, 1):
                     codec = vs.get("codec_name", "unknown").upper()
                     profile = vs.get("profile", "")
@@ -333,10 +345,22 @@ class MediaInspectorMixin:
                     fps_str = f"{fps_val:.3f} fps" if fps_val else "N/A"
                     v_bitrate = _format_bitrate(vs.get("bit_rate"))
                     pix_fmt = vs.get("pix_fmt", "N/A")
+                    pf_low = str(pix_fmt).lower()
                     color_space = vs.get("color_space") or vs.get("colorspace", "N/A")
                     color_primaries = vs.get("color_primaries", "N/A")
                     color_transfer = vs.get("color_transfer", "N/A")
-                    bits_raw = vs.get("bits_per_raw_sample") or (10 if "10" in pix_fmt else 8 if "8" in pix_fmt else "N/A")
+                    if vs.get("bits_per_raw_sample"):
+                        bits_raw = vs.get("bits_per_raw_sample")
+                    elif any(tok in pf_low for tok in ("16le", "16be", "rgb48", "rgba64", "p016")):
+                        bits_raw = 16
+                    elif any(tok in pf_low for tok in ("12le", "12be", "p012")):
+                        bits_raw = 12
+                    elif any(tok in pf_low for tok in ("10le", "10be", "10", "p010")):
+                        bits_raw = 10
+                    elif any(tok in pf_low for tok in ("yuv", "nv12", "nv21", "rgb", "bgr", "argb", "abgr", "gray")):
+                        bits_raw = 8
+                    else:
+                        bits_raw = "N/A"
 
                     report.append(f"\n### Video Stream #{idx}")
                     report.append(f"- **Codec:** `{codec_str}`")
@@ -346,10 +370,20 @@ class MediaInspectorMixin:
                     report.append(f"- **Pixel Format & Chroma:** `{pix_fmt}`")
                     report.append(f"- **Bit Depth / HDR:** `{bits_raw}-bit` (Color Space: `{color_space}`, Primaries: `{color_primaries}`, Transfer: `{color_transfer}`)")
 
+            # --- EMBEDDED COVER ART ---
+            if cover_streams:
+                report.append("\n## Embedded Cover Art")
+                for idx, cs in enumerate(cover_streams, 1):
+                    c_codec = cs.get("codec_name", "image").upper()
+                    cw = cs.get("width")
+                    ch = cs.get("height")
+                    c_res = f"{cw}x{ch}" if cw and ch else "N/A"
+                    report.append(f"- **Cover #{idx}:** `{c_codec}` (`{c_res}`)")
+
             # --- AUDIO STREAMS ---
             audio_streams = [s for s in ffprobe_data.get("streams", []) if s.get("codec_type") == "audio"]
             if audio_streams:
-                report.append("\n## 🔊 Audio Stream(s)")
+                report.append("\n## Audio Stream(s)")
                 for idx, audio_s in enumerate(audio_streams, 1):
                     a_codec = audio_s.get("codec_name", "unknown").upper()
                     a_profile = audio_s.get("profile", "")
@@ -376,7 +410,7 @@ class MediaInspectorMixin:
             # --- SUBTITLES ---
             sub_streams = [s for s in ffprobe_data.get("streams", []) if s.get("codec_type") == "subtitle"]
             if sub_streams:
-                report.append("\n## 💬 Subtitle Tracks")
+                report.append("\n## Subtitle Tracks")
                 for idx, sub_s in enumerate(sub_streams, 1):
                     s_codec = sub_s.get("codec_name", "unknown").upper()
                     s_lang = sub_s.get("tags", {}).get("language", "und")
@@ -387,7 +421,7 @@ class MediaInspectorMixin:
             # --- CHAPTERS ---
             chapters = ffprobe_data.get("chapters", [])
             if chapters:
-                report.append(f"\n## 📑 Chapters ({len(chapters)} found)")
+                report.append(f"\n## Chapters ({len(chapters)} found)")
                 for idx, ch in enumerate(chapters[:15], 1):
                     start = _format_duration(ch.get("start_time"))
                     end = _format_duration(ch.get("end_time"))
@@ -398,7 +432,7 @@ class MediaInspectorMixin:
 
         # --- IMAGE DETAILS & EXIF ---
         if pillow_data:
-            report.append("\n## 🖼 Image & Optics Properties")
+            report.append("\n## Image & Optics Properties")
             w = pillow_data.get("width")
             h = pillow_data.get("height")
             mp = pillow_data.get("megapixels")
@@ -432,10 +466,10 @@ class MediaInspectorMixin:
             if pillow_data.get("date_taken"):
                 exif_highlights.append(f"- **Date Taken:** `{pillow_data['date_taken']}`")
             if pillow_data.get("gps"):
-                exif_highlights.append(f"- **📍 GPS Coordinates:** `{pillow_data['gps']}`")
+                exif_highlights.append(f"- **GPS Coordinates:** `{pillow_data['gps']}`")
 
             if exif_highlights:
-                report.append("\n### 📷 Camera & EXIF Metadata")
+                report.append("\n### Camera & EXIF Metadata")
                 report.extend(exif_highlights)
 
         # --- METADATA TAGS ---
@@ -453,7 +487,7 @@ class MediaInspectorMixin:
                     found_tags[k] = str(v).strip()
 
             if found_tags:
-                report.append("\n## 🏷 Metadata Tags")
+                report.append("\n## Metadata Tags")
                 for k, v in found_tags.items():
                     report.append(f"- **{k}:** {v}")
 

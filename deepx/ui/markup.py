@@ -77,71 +77,177 @@ from deepx.core.config import *
 from deepx.ui.terminal import console
 
 ANSI_ESCAPE_RE = re.compile(
-    r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-_])"
+    r"\x1b(?:\][^\x07\x1b]*(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~]|[@-_])"
 )
 
+
 def sanitize_tool_result(text: str) -> str:
-                                                                                          
     text = ANSI_ESCAPE_RE.sub("", str(text))
     return "".join(
         char for char in text
         if char in "\n\r\t" or ord(char) >= 32
     )
 
+
+def _strip_partial_trailing_marker(text: str) -> str:
+    """Trim partial tool/JSON/markdown-fence openings during live streaming."""
+    if not text:
+        return ""
+    trimmed = text.rstrip()
+    markers = (
+        ("```tool_call", 4),
+        ("```tool_calls", 4),
+        ("```tools", 4),
+        ("```tool", 4),
+        ("```json", 4),
+        ("<tool_call>", 3),
+        ("<tool_calls>", 3),
+        ("<function_call>", 3),
+        ("<invoke", 3),
+        ("<thought>", 3),
+        ('{"tool"', 3),
+        ('{"tool_name"', 3),
+    )
+    for marker, min_len in markers:
+        for prefix_len in range(len(marker), min_len - 1, -1):
+            prefix = marker[:prefix_len]
+            if trimmed.lower().endswith(prefix.lower()):
+                return trimmed[:-prefix_len].rstrip()
+
+    # Check if an unclosed JSON tool object started near the tail
+    last_brace = text.rfind("{")
+    if last_brace != -1 and "}" not in text[last_brace:]:
+        tail_fragment = text[last_brace:]
+        if re.match(
+            r'^\{\s*(?:"(?:tool|tool_name|function|run_cmd|read_file|write_file|edit_file|grep_search|list_dir|run_python)"|\w+\s*:)',
+            tail_fragment,
+        ):
+            return text[:last_brace].rstrip()
+
+    return text
+
+
 def get_clean_text(text: str) -> str:
-    text = re.sub(
+    """Remove tool-call payloads, internal markers, and reasoning tags while preserving prose and code blocks."""
+    value = str(text or "")
+    if not value:
+        return ""
+
+    value = re.sub(
         r"Чтение ссылок недоступно в Экспертном режиме\.?\s*"
         r"(?:Используйте|Переключитесь на)\s+Быстрый режим\.?",
         "",
-        text,
+        value,
         flags=re.IGNORECASE,
     )
-    text = re.sub(
+    value = re.sub(
         r"(?:Reading|Opening) links? (?:is|are) "
         r"(?:unavailable|not available) in Expert mode\.?\s*"
         r"(?:Use|Switch to) (?:Fast|Instant) mode\.?",
         "",
-        text,
+        value,
         flags=re.IGNORECASE,
     )
-    text = re.sub(r"^Глубокое размышление\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*<(?:tool_call|function_call)>.*?(?:</(?:tool_call|function_call)>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"\s*<tool_calls>.*?(?:</tool_calls>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r"\s*<invoke\b.*?(?:</invoke\s*>|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
-    
-    text = re.sub(r"\s*```(?:tool_call|tool_calls|tools|tool)\s*\n.*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
-    
-    text = re.sub(r"\s*```json\s*\n.*?(?:\"tool\"|\"args\"|\"name\"|\"function\"|\"command\"|\"run_cmd\").*?(?:\n```(?=\n|$)|\Z)", "", text, flags=re.DOTALL)
+    value = re.sub(r"^Глубокое размышление\s*", "", value, flags=re.IGNORECASE)
 
-    # While streaming, the opening marker arrives character by character
-    # (for example "```tool_call"). Do not print those temporary fragments
-    # before the complete tool block can be recognized and removed.
-    # Minimum prefix length is 3 to avoid accidentally stripping single backticks or '<'.
-    trimmed = text.rstrip()
-    for marker in ("```tool_call", "```tool_calls", "```tools", "```tool", "<tool_call>", "<tool_calls>", "<invoke"):
-        for prefix_length in range(len(marker), 2, -1):
-            prefix = marker[:prefix_length]
-            if trimmed.endswith(prefix):
-                text = trimmed[:-prefix_length].rstrip()
-                break
-        else:
-            continue
-        break
+    # Strip internal <thought>...</thought> and XML tool call formats (both closed and streaming unclosed)
+    value = re.sub(r"\s*<thought>.*?(?:</thought>|$)", "", value, flags=re.DOTALL | re.IGNORECASE)
+    value = re.sub(r"\s*<(?:tool_call|function_call)>.*?(?:</(?:tool_call|function_call)>|$)", "", value, flags=re.DOTALL | re.IGNORECASE)
+    value = re.sub(r"\s*<tool_calls>.*?(?:</tool_calls>|$)", "", value, flags=re.DOTALL | re.IGNORECASE)
+    value = re.sub(r"\s*<invoke\b.*?(?:</invoke\s*>|$)", "", value, flags=re.DOTALL | re.IGNORECASE)
 
-    return text
+    try:
+        from deepx.parser.tool_parser import (
+            _dict_to_tool_call,
+            _iter_fenced_blocks,
+            _KNOWN_TOOL_NAMES,
+            canonicalize_tool_name,
+            extract_json_objects,
+            parse_json_lenient,
+        )
+    except Exception:
+        return _strip_partial_trailing_marker(value).strip()
+
+    # Remove only fenced blocks that are tool calls; keep ordinary code/json blocks intact with their ```
+    fenced_blocks = _iter_fenced_blocks(value)
+    if fenced_blocks:
+        rebuilt = []
+        cursor = 0
+        for lang, body, start_pos, end_pos in fenced_blocks:
+            rebuilt.append(value[cursor:start_pos])
+            cursor = end_pos
+
+            is_tool_fence = lang in ("tool_call", "tool_calls", "tools", "tool")
+            if not is_tool_fence and lang in ("", "json", "json5"):
+                body_strip = body.strip()
+                # Check parsed JSON tool calls first
+                objs = extract_json_objects(body_strip) or [body_strip]
+                for obj_str in objs:
+                    parsed = parse_json_lenient(obj_str)
+                    if isinstance(parsed, dict) and _dict_to_tool_call(parsed, require_known=True):
+                        is_tool_fence = True
+                        break
+                    if isinstance(parsed, list) and any(
+                        isinstance(item, dict) and _dict_to_tool_call(item, require_known=True)
+                        for item in parsed
+                    ):
+                        is_tool_fence = True
+                        break
+                # Also suppress incomplete streaming JSON tool block in ```json / ``` fence
+                if not is_tool_fence and not value[start_pos:end_pos].rstrip().endswith("```"):
+                    if re.match(r'^\{\s*"(tool|tool_name)"', body_strip):
+                        is_tool_fence = True
+                    else:
+                        first_key = re.match(r'^\{\s*"([a-zA-Z0-9_\-]+)"\s*:', body_strip)
+                        if first_key and canonicalize_tool_name(first_key.group(1)) in _KNOWN_TOOL_NAMES:
+                            is_tool_fence = True
+
+            if not is_tool_fence:
+                rebuilt.append(value[start_pos:end_pos])
+        rebuilt.append(value[cursor:])
+        value = "".join(rebuilt)
+
+    # Strip raw unfenced tool JSON objects outside remaining code fences
+    remaining_fences = _iter_fenced_blocks(value)
+    protected_spans = [(s, e) for _, _, s, e in remaining_fences]
+
+    def _in_protected_span(pos: int) -> bool:
+        return any(s <= pos < e for s, e in protected_spans)
+
+    raw_objs = extract_json_objects(value)
+    if raw_objs:
+        search_from = 0
+        out_parts = []
+        cursor = 0
+        for obj_str in raw_objs:
+            idx = value.find(obj_str, search_from)
+            if idx == -1:
+                continue
+            search_from = idx + len(obj_str)
+            if _in_protected_span(idx):
+                continue
+            parsed = parse_json_lenient(obj_str)
+            is_tool_obj = False
+            if isinstance(parsed, dict) and _dict_to_tool_call(parsed, require_known=True):
+                is_tool_obj = True
+            elif isinstance(parsed, list) and any(
+                isinstance(item, dict) and _dict_to_tool_call(item, require_known=True)
+                for item in parsed
+            ):
+                is_tool_obj = True
+            if is_tool_obj:
+                out_parts.append(value[cursor:idx])
+                cursor = idx + len(obj_str)
+        out_parts.append(value[cursor:])
+        value = "".join(out_parts)
+
+    value = _strip_partial_trailing_marker(value)
+    value = re.sub(r"\n{3,}", "\n\n", value)
+    return value.strip()
+
 
 class StableStreamText:
-    """Confirm DOM text across two snapshots without waiting for a newline.
-
-    DeepSeek occasionally rebuilds the tail of its Markdown DOM while a token
-    is arriving.  Printing the whole newest snapshot can therefore duplicate
-    a rewritten tail, while buffering the last *line* makes long paragraphs
-    appear frozen.  The common prefix of two consecutive snapshots is both
-    append-safe and normally only one polling interval behind the browser.
-    """
-
-class StableStreamText:
-    """Stabilizes streaming text from browser DOM to ensure smooth append-only progressive rendering."""
+    """Confirm DOM text across two snapshots to ensure monotonic append-only streaming."""
 
     def __init__(self):
         self._previous = ""
@@ -152,20 +258,17 @@ class StableStreamText:
         if not current:
             return self._committed
 
-        # 1. Direct extension
         if current.startswith(self._committed):
             self._committed = current
             self._previous = current
             return self._committed
 
-        # 2. Extension ignoring trailing whitespace collapse
         committed_stripped = self._committed.rstrip()
         if committed_stripped and current.startswith(committed_stripped):
             self._committed = current
             self._previous = current
             return self._committed
 
-        # 3. Common prefix with previous snapshot
         common_len = 0
         for c1, c2 in zip(self._previous, current):
             if c1 != c2:
@@ -189,8 +292,6 @@ class StableStreamText:
         return self._committed
 
 
-
-
 STREAM_INLINE_STYLES = {
     "***": "\033[1;3m",
     "**": "\033[1m",
@@ -203,12 +304,7 @@ STREAM_INLINE_STYLES = {
 
 
 class StreamingMarkupRenderer:
-    """Progressive incremental Markdown -> ANSI terminal renderer for live streams.
-
-    Processes raw markdown as it arrives monotonically, converting newly
-    arrived characters into ANSI escape sequences without emitting premature reset
-    sequences that break stream continuity.
-    """
+    """Progressive incremental Markdown -> ANSI terminal renderer for live streams."""
 
     def __init__(self):
         self.raw_pos = 0
@@ -221,6 +317,7 @@ class StreamingMarkupRenderer:
         self.heading_style = "\033[1;38;5;255m"
         self.at_line_start = True
         self.last_char = "\n"
+        self._last_source = ""
 
     def _reapply_styles(self) -> str:
         res = "\033[0m"
@@ -230,11 +327,12 @@ class StreamingMarkupRenderer:
             res += STREAM_INLINE_STYLES.get(s, "")
         return res
 
-    def update(self, source: str) -> str:
+    def update(self, source: str, final: bool = False) -> str:
         if not source:
             return ""
-        if len(source) < self.raw_pos or not source.startswith(source[:self.raw_pos]):
-            # Source got reset or truncated
+        source = str(source).replace("\r\n", "\n")
+        self._last_source = source
+        if len(source) < self.raw_pos:
             self.raw_pos = 0
             self.rendered_text = ""
             self.active_inline_styles.clear()
@@ -251,12 +349,21 @@ class StreamingMarkupRenderer:
         while self.raw_pos < src_len:
             i = self.raw_pos
 
-            # 1. Inside code block
+            # 1. Inside fenced code block
             if self.in_code_block:
-                line_start = self.at_line_start
-                if line_start and source.startswith("```", i):
-                    fence_m = re.match(r"^```[ \t]*(\n|$)", source[i:])
+                if self.at_line_start:
+                    tail_slice = source[i:]
+                    if not final and (
+                        tail_slice in ("`", "``", "```")
+                        or (tail_slice.startswith("```") and "\n" not in tail_slice and tail_slice.strip("` \t\r") == "")
+                    ):
+                        break
+                    fence_m = re.match(r"^```[ \t]*(?:\r?\n|$)", tail_slice)
                     if fence_m:
+                        if not final and fence_m.group(0).endswith("```"):
+                            # Wait for newline unless final
+                            if not tail_slice.endswith("\n"):
+                                break
                         if self.code_line_buf:
                             styled = _highlight_code_line(self.code_line_buf, self.code_lang)
                             delta_out.append(f"{BORDER_STYLE}│\033[0m {styled}\n")
@@ -269,11 +376,11 @@ class StreamingMarkupRenderer:
                         self.last_char = "\n"
                         self.raw_pos = i + fence_m.end()
                         continue
-                    elif i + 3 >= src_len:
-                        break
 
                 ch = source[i]
                 self.raw_pos += 1
+                if ch == "\r":
+                    continue
                 if ch == "\n":
                     styled = _highlight_code_line(self.code_line_buf, self.code_lang)
                     if self.code_line_buf:
@@ -289,18 +396,22 @@ class StreamingMarkupRenderer:
                     self.last_char = ch
                 continue
 
-            # 2. Check for code block opening
-            if self.at_line_start and source.startswith("```", i):
-                fence_m = re.match(r"^```([a-zA-Z0-9_\-\.\+\#]*)[ \t]*(\n|$)", source[i:])
+            # 2. Check for code block opening at line start (wait across partial ``` chunk)
+            if self.at_line_start and source[i] == "`":
+                tail_slice = source[i:]
+                if not final and (tail_slice in ("`", "``") or (tail_slice.startswith("```") and "\n" not in tail_slice)):
+                    break
+                fence_m = re.match(r"^```([a-zA-Z0-9_\-\.\+\#]*)[ \t]*(?:\r?\n|$)", tail_slice)
                 if fence_m:
-                    has_newline = bool(fence_m.group(2))
-                    if not has_newline and i + fence_m.end() >= src_len:
+                    if not final and "\n" not in fence_m.group(0):
                         break
                     lang = fence_m.group(1).strip()
                     lang_label = lang if lang else "code"
                     border_width = 48
                     bar_len = max(4, border_width - len(lang_label) - 6)
-                    delta_out.append(f"{BORDER_STYLE}┌── {LANG_STYLE}{lang_label}\033[0m {BORDER_STYLE}{'─' * bar_len}\033[0m\n")
+                    delta_out.append(
+                        f"{BORDER_STYLE}┌── {LANG_STYLE}{lang_label}\033[0m {BORDER_STYLE}{'─' * bar_len}\033[0m\n"
+                    )
                     self.in_code_block = True
                     self.code_lang = lang
                     self.code_line_buf = ""
@@ -308,12 +419,12 @@ class StreamingMarkupRenderer:
                     self.last_char = "\n"
                     self.raw_pos = i + fence_m.end()
                     continue
-                elif i + 3 >= src_len:
-                    break
 
             # 3. Inside inline code (`code` or ``code``)
             if self.active_inline_styles and self.active_inline_styles[-1] in ("`", "``"):
                 delim = self.active_inline_styles[-1]
+                if not final and delim == "`" and i + 1 == src_len and source[i] == "`":
+                    break
                 if source.startswith(delim, i):
                     self.active_inline_styles.pop()
                     delta_out.append(self._reapply_styles())
@@ -330,7 +441,10 @@ class StreamingMarkupRenderer:
 
             # 4. Heading detection at line start
             if self.at_line_start and source[i] == "#":
-                heading = re.match(r"^(#{1,6})[ \t]+", source[i:])
+                tail_slice = source[i:]
+                if not final and tail_slice.strip("#") == "" and len(tail_slice) <= 6:
+                    break
+                heading = re.match(r"^(#{1,6})[ \t]+", tail_slice)
                 if heading:
                     self.in_heading = True
                     delta_out.append(self.heading_style)
@@ -338,11 +452,11 @@ class StreamingMarkupRenderer:
                     self.at_line_start = False
                     self.last_char = " "
                     continue
-                elif i + 7 >= src_len and source[i:].strip("#") == "":
-                    break
 
             # 5. Bullet list at line start
             if self.at_line_start and source[i] in ("-", "+", "*"):
+                if i + 1 >= src_len and not final:
+                    break
                 if i + 1 < src_len and source[i + 1] in (" ", "\t"):
                     delta_out.append("• ")
                     self.raw_pos = i + 2
@@ -351,51 +465,60 @@ class StreamingMarkupRenderer:
                     self.at_line_start = False
                     self.last_char = " "
                     continue
-                elif i + 1 >= src_len:
-                    break
 
             # 6. Escape sequence
-            if source[i] == "\\" and i + 1 < src_len and source[i + 1] in "*_~`\\":
-                ch = source[i + 1]
-                delta_out.append(ch)
-                self.raw_pos = i + 2
-                self.at_line_start = (ch == "\n")
-                self.last_char = ch
-                continue
+            if source[i] == "\\":
+                if i + 1 >= src_len and not final:
+                    break
+                if i + 1 < src_len and source[i + 1] in "*_~`\\":
+                    ch = source[i + 1]
+                    delta_out.append(ch)
+                    self.raw_pos = i + 2
+                    self.at_line_start = (ch == "\n")
+                    self.last_char = ch
+                    continue
 
-            # 7. Check for inline delimiters (***, **, ~~, ``, *, _, `)
+            # 7. Check for inline delimiters (***, **, ~~, ``, *, _, `) — hold partial markers across chunks
+            tail_slice = source[i:]
+            if not final and (
+                tail_slice in ("*", "**", "~", "`", "``")
+                or (len(tail_slice) <= 3 and any(d.startswith(tail_slice) for d in ("***", "**", "~~", "``")))
+            ):
+                break
+
             delimiter = None
+            need_more_data = False
             for candidate in ("***", "**", "~~", "``", "*", "_", "`"):
                 if source.startswith(candidate, i):
                     if candidate == "_" and i > 0 and source[i - 1].isalnum():
                         continue
                     is_closing = bool(self.active_inline_styles and self.active_inline_styles[-1] == candidate)
-                    if not is_closing:
-                        if i + len(candidate) >= src_len:
-                            break
-                        if candidate in ("*", "**", "***", "_") and source[i + len(candidate)].isspace():
-                            continue
+                    if is_closing:
+                        delimiter = candidate
+                        break
+                    if i + len(candidate) >= src_len:
+                        if not final:
+                            need_more_data = True
+                        break
+                    if candidate in ("*", "**", "***", "_") and source[i + len(candidate)].isspace():
+                        continue
                     delimiter = candidate
                     break
-            else:
-                if i + 3 >= src_len and any(source.startswith(c[:len(source)-i], i) for c in ("***", "**", "~~", "``")):
-                    break
+
+            if need_more_data:
+                break
 
             if delimiter:
                 if self.active_inline_styles and self.active_inline_styles[-1] == delimiter:
                     self.active_inline_styles.pop()
                     delta_out.append(self._reapply_styles())
-                    self.raw_pos = i + len(delimiter)
-                    self.last_char = delimiter[-1]
-                    self.at_line_start = False
-                    continue
                 else:
                     self.active_inline_styles.append(delimiter)
                     delta_out.append(STREAM_INLINE_STYLES.get(delimiter, ""))
-                    self.raw_pos = i + len(delimiter)
-                    self.last_char = delimiter[-1]
-                    self.at_line_start = False
-                    continue
+                self.raw_pos = i + len(delimiter)
+                self.last_char = delimiter[-1]
+                self.at_line_start = False
+                continue
 
             ch = source[i]
             if ch == "\n":
@@ -416,6 +539,8 @@ class StreamingMarkupRenderer:
 
     def finish(self) -> str:
         tail = []
+        if self._last_source and self.raw_pos < len(self._last_source):
+            tail.append(self.update(self._last_source, final=True))
         if self.in_code_block:
             if self.code_line_buf:
                 styled = _highlight_code_line(self.code_line_buf, self.code_lang)

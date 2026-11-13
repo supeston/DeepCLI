@@ -1,38 +1,15 @@
 import asyncio
-import concurrent.futures
-import ctypes
-import difflib
-from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
-import json
 import os
-import py_compile
 import re
-import shutil
-import signal
-import subprocess
-import sys
-import textwrap
-import unicodedata
-from pathlib import Path
 
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
+from deepx.agent.checkpoints import CheckpointManager
+from deepx.core.config import APP_DIR, default_workspace_dir
+from deepx.core.constants import (
+    SELF_PROTECTED_DIRS,
+    SELF_PROTECTED_FILES,
+    SELF_PROTECTED_PREFIXES,
+)
+from deepx.parser.tool_parser import canonicalize_tool_name, normalize_tool_args
 from deepx.tools.dadata_osint import DadataOSINTTool
 from deepx.tools.funstat_osint import FunstatOSINTTool
 
@@ -40,11 +17,6 @@ from deepx.tools.funstat_osint import FunstatOSINTTool
                     
                                                                                 
 
-from deepx.core.constants import *
-from deepx.core.config import *
-from deepx.parser.tool_parser import normalize_tool_args, canonicalize_tool_name
-from deepx.ui.markup import *
-from deepx.ui.terminal import console
 from .system import SystemToolsMixin
 from .filesystem import FileSystemToolsMixin
 from .browser import BrowserToolsMixin
@@ -68,6 +40,24 @@ class AgentTools(
     ClipboardMixin,
     VDSToolsMixin,
 ):
+    _PLAN_MODE_BLOCKED_TOOLS = frozenset({
+        "write_file",
+        "edit_file",
+        "make_excel",
+        "make_docx",
+        "make_pptx",
+        "zip_pack",
+        "unzip_pack",
+        "run_cmd",
+        "run_python",
+        "run_background_cmd",
+        "vds_deploy",
+        "write_clipboard",
+        "set_clipboard",
+        "delete_clipboard_item",
+        "clear_clipboard_history",
+    })
+
     def __init__(
         self,
         cwd: str = None,
@@ -75,16 +65,15 @@ class AgentTools(
         browser_headless: bool = True
     ):
         self.cwd = os.path.abspath(cwd) if cwd else default_workspace_dir()
-                                                                                      
-                                                                                         
         self.browser_state_file = os.path.abspath(os.path.join(APP_DIR, browser_state_file))
         self.project_memory_file = os.path.abspath(
-            os.path.join(APP_DIR, ".deepx_project_memory.json")
+            os.path.join(self.cwd, ".deepx_project_memory.json")
         )
         self.browser_headless = browser_headless
-                                                                                           
         self.protect_self = False
+        self.plan_mode = False
         self.extra_protected = set()
+        self.checkpoints = CheckpointManager(self.cwd)
         self.todos = []
         self._todo_dirty = False
         self._todo_rendered_signature = None
@@ -96,6 +85,14 @@ class AgentTools(
         self.browser_stealth_status = "not initialized"
         self.active_tasks = {}
         self._background_task_counter = 0
+
+    def set_workspace(self, cwd: str):
+        self.cwd = os.path.abspath(cwd)
+        self.project_memory_file = os.path.abspath(
+            os.path.join(self.cwd, ".deepx_project_memory.json")
+        )
+        if hasattr(self, "checkpoints") and self.checkpoints is not None:
+            self.checkpoints.set_workspace(self.cwd)
     def add_protected(self, path: str):
                                                                                           
         if path:
@@ -133,14 +130,33 @@ class AgentTools(
             "Do not attempt to reach it by another route.]"
         )
     def _command_touches_self(self, text: str) -> bool:
-                                                                                          
         if not self.protect_self or not text:
             return False
         lowered = str(text).lower()
         needles = set(SELF_PROTECTED_FILES) | set(SELF_PROTECTED_DIRS)
         needles.update(SELF_PROTECTED_PREFIXES)
         needles.update(os.path.basename(p).lower() for p in self.extra_protected)
-        return any(needle in lowered for needle in needles)
+        app_real = os.path.realpath(APP_DIR).lower()
+        needles.update({
+            app_real,
+            APP_DIR.lower(),
+            "deepx/",
+            "deepx\\",
+            "deepx.",
+            "import deepx",
+            "from deepx",
+            "deepx/core",
+            "deepx\\core",
+            "deepx/tools",
+            "deepx\\tools",
+            "deepx/agent",
+            "deepx\\agent",
+            "tools/vds.py",
+            "tools\\vds.py",
+            "tools/manager.py",
+            "tools\\manager.py",
+        })
+        return any(needle and needle in lowered for needle in needles)
     def _process_kill_guard(self, text: str):
         """Reject process-kill commands that can terminate the DEEPX runner."""
         if not text:
@@ -214,6 +230,11 @@ class AgentTools(
         args = normalize_tool_args(args or {})
         if allowed_tools is not None and tool_name not in allowed_tools and canonicalize_tool_name(tool_name) not in allowed_tools:
             return f"[Error: Tool '{tool_name}' is unavailable in the active agent style]"
+        if getattr(self, "plan_mode", False) and tool_name in self._PLAN_MODE_BLOCKED_TOOLS:
+            return (
+                f"[Blocked in Plan mode: tool '{tool_name}' modifies files or executes external actions. "
+                "Finish planning or switch mode with /mode think or /mode instant first.]"
+            )
         if tool_name == "run_cmd":
             command = args.get("command") or args.get("cmd") or args.get("shell") or args.get("code") or ""
             return await asyncio.to_thread(
@@ -240,11 +261,15 @@ class AgentTools(
                 command, args.get("inputs", None)
             )
         elif tool_name == "task_status":
-            return await self.task_status(str(args.get("id") or args.get("task_id") or ""))
+            return self.task_status(str(args.get("id") or args.get("task_id") or ""))
         elif tool_name == "task_log":
-            return await self.task_log(
+            return self.task_log(
                 str(args.get("id") or args.get("task_id") or ""),
                 args.get("tail_lines", 200),
+            )
+        elif tool_name == "kill_background_cmd":
+            return await self.kill_background_cmd(
+                str(args.get("id") or args.get("task_id") or "")
             )
         elif tool_name == "todo":
             return self.todo(args.get("action", "list"), args)
@@ -262,15 +287,28 @@ class AgentTools(
                 args.get("action", "free_scan"),
                 args.get("telegram_id"),
                 args.get("username"),
+                allow_paid=bool(args.get("allow_paid", True)),
             )
         elif tool_name == "dadata_osint":
+            dadata_opts = args.get("options", {})
+            req_out = (
+                (dadata_opts.get("output_dir") if isinstance(dadata_opts, dict) else None)
+                or args.get("output_dir")
+            )
+            resolved_out = os.path.abspath(
+                os.path.join(self.cwd, str(req_out) if req_out else "dadata_logos")
+            )
+            if self.is_protected(resolved_out):
+                return self._deny(str(req_out or resolved_out))
             return await DadataOSINTTool().run(
                 action=args.get("action", ""),
                 query=args.get("query"),
                 lat=args.get("lat"),
                 lon=args.get("lon"),
                 count=args.get("count", 10),
-                options=args.get("options", {}),
+                options=dadata_opts,
+                output_dir=resolved_out,
+                protected_checker=self.is_protected,
             )
         elif tool_name == "fetch_url":
             url = str(args.get("url") or args.get("link") or args.get("target") or "")
@@ -306,27 +344,53 @@ class AgentTools(
         elif tool_name == "list_dir":
             path = str(args.get("path") or args.get("dir") or args.get("directory") or ".")
             return await asyncio.to_thread(self.list_dir, path)
+        elif tool_name == "grep_search":
+            pattern = str(args.get("pattern") or args.get("query") or args.get("text") or "")
+            path = str(args.get("path") or args.get("dir") or ".")
+            include = str(args.get("include") or args.get("glob") or "")
+            return await asyncio.to_thread(
+                self.grep_search,
+                pattern,
+                path,
+                include,
+                args.get("max_results", 60),
+                bool(args.get("case_sensitive", False)),
+            )
         elif tool_name == "file_info":
             path = str(args.get("path") or args.get("file") or args.get("filename") or "")
-            return self.file_info(path)
+            return await asyncio.to_thread(self.file_info, path)
         elif tool_name == "project_memory":
-            return self.project_memory(args.get("action", "get"), args)
+            return await asyncio.to_thread(self.project_memory, args.get("action", "get"), args)
         elif tool_name == "sys_info":
             return self.sys_info()
         elif tool_name == "browser_action":
             return await self.browser_action(args.get("action", ""), args)
         elif tool_name == "render_plan":
-            return self.render_plan(args.get("title", "План выполнения задачи"), args.get("steps", []))
+            return await asyncio.to_thread(
+                self.render_plan,
+                args.get("title", "План выполнения задачи"),
+                args.get("steps", []),
+            )
         elif tool_name == "make_excel":
-            return self.make_excel(args.get("path", ""), args.get("sheets", {}))
+            return await asyncio.to_thread(self.make_excel, args.get("path", ""), args.get("sheets", {}))
         elif tool_name == "make_docx":
-            return self.make_docx(args.get("path", ""), args.get("title", "Document"), args.get("paragraphs", []))
+            return await asyncio.to_thread(
+                self.make_docx,
+                args.get("path", ""),
+                args.get("title", "Document"),
+                args.get("paragraphs", []),
+            )
         elif tool_name == "make_pptx":
-            return self.make_pptx(args.get("path", ""), args.get("title", "Presentation"), args.get("slides", []))
+            return await asyncio.to_thread(
+                self.make_pptx,
+                args.get("path", ""),
+                args.get("title", "Presentation"),
+                args.get("slides", []),
+            )
         elif tool_name == "zip_pack":
-            return self.zip_pack(args.get("zip_path", ""), args.get("files", []))
+            return await asyncio.to_thread(self.zip_pack, args.get("zip_path", ""), args.get("files", []))
         elif tool_name == "unzip_pack":
-            return self.unzip_pack(args.get("zip_path", ""), args.get("extract_to", "."))
+            return await asyncio.to_thread(self.unzip_pack, args.get("zip_path", ""), args.get("extract_to", "."))
         elif tool_name == "inspect_media":
             return await asyncio.to_thread(
                 self.inspect_media,
@@ -355,7 +419,10 @@ class AgentTools(
         elif tool_name == "clear_clipboard_history":
             return await asyncio.to_thread(self.clear_clipboard_history)
         elif tool_name == "vds_deploy":
-            return await asyncio.to_thread(self.vds_deploy, **args)
+            safe_args = dict(args)
+            vds_action = safe_args.pop("action", None)
+            safe_args.pop("self", None)
+            return await asyncio.to_thread(self.vds_deploy, vds_action, **safe_args)
 
         else:
             return f"[Error: Unknown tool '{tool_name}']"

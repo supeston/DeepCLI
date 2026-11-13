@@ -91,16 +91,32 @@ class FileSystemToolsMixin:
             return f"[Error reading file '{path}': {e}]"
 
     def _syntax_check_file(self, abs_path: str, content: str) -> str:
-        suffix = Path(abs_path).suffix.lower()
-        try:
-            if suffix == ".py":
-                py_compile.compile(abs_path, doraise=True)
-            elif suffix == ".json":
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext == ".py":
+            try:
+                import ast
+                ast.parse(content, filename=abs_path)
+            except SyntaxError as exc:
+                line = exc.lineno or "?"
+                col = exc.offset or "?"
+                return f"\n[Success: File saved, BUT Syntax Check Failed: line {line}, column {col}: {exc.msg}]"
+            except Exception as exc:
+                return f"\n[Success: File saved, BUT Syntax Check Failed: {exc}]"
+            return "\n[Syntax Check: OK]"
+        if ext == ".json":
+            try:
                 json.loads(content)
-            elif suffix in {".js", ".mjs", ".cjs"}:
-                node = shutil.which("node")
-                if node is None:
-                    return "\n[Syntax Check Skipped: Node.js executable was not found]"
+            except json.JSONDecodeError as exc:
+                return (
+                    "\n[Success: File saved, BUT Syntax Check Failed: "
+                    f"line {exc.lineno}, column {exc.colno}: {exc.msg}]"
+                )
+            return "\n[Syntax Check: OK]"
+        if ext in {".js", ".mjs", ".cjs"}:
+            node = shutil.which("node")
+            if node is None:
+                return "\n[Syntax Check Skipped: Node.js executable was not found]"
+            try:
                 result = subprocess.run(
                     [node, "--check", abs_path],
                     cwd=self.cwd,
@@ -111,69 +127,114 @@ class FileSystemToolsMixin:
                     timeout=15,
                 )
                 if result.returncode != 0:
-                    detail = (result.stderr or result.stdout).strip()
-                    detail = re.sub(r"\s+", " ", detail)
+                    detail = re.sub(r"\s+", " ", (result.stderr or result.stdout).strip())
                     return f"\n[Success: File saved, BUT Syntax Check Failed: {detail}]"
-            else:
-                return ""
-        except py_compile.PyCompileError as error:
-            detail = re.sub(r"\s+", " ", str(error))
-            return f"\n[Success: File saved, BUT Syntax Check Failed: {detail}]"
-        except json.JSONDecodeError as error:
-            return (
-                "\n[Success: File saved, BUT Syntax Check Failed: "
-                f"line {error.lineno}, column {error.colno}: {error.msg}]"
-            )
-        except subprocess.TimeoutExpired:
-            return "\n[Syntax Check Skipped: Node.js syntax check timed out]"
-        except Exception as error:
-            return f"\n[Syntax Check Skipped: {type(error).__name__}: {error}]"
-        return "\n[Syntax Check: OK]"
+                return "\n[Syntax Check: OK]"
+            except subprocess.TimeoutExpired:
+                return "\n[Syntax Check Skipped: Node.js syntax check timed out]"
+            except Exception as exc:
+                return f"\n[Syntax Check Skipped: {type(exc).__name__}: {exc}]"
+        return ""
+
+    def grep_search(
+        self,
+        query: str,
+        path: str = ".",
+        include: str = "",
+        case_sensitive: bool = False,
+        regex: bool = False,
+        max_results: int = 80,
+    ) -> str:
+        """Fast recursive text/regex search across project files (skips .git/.venv/node_modules)."""
+        if not query or not str(query):
+            return "[Error: grep_search requires a non-empty 'query' argument]"
+
+        target_root = path if os.path.isabs(path) else os.path.join(self.cwd, path or ".")
+        target_root = os.path.abspath(target_root)
+        if self.is_protected(target_root):
+            return self._deny(target_root)
+        if not os.path.exists(target_root):
+            return f"[Error: Path not found: {target_root}]"
+
+        flags = 0 if case_sensitive else re.IGNORECASE
+        try:
+            pattern = re.compile(query if regex else re.escape(query), flags)
+        except re.error as exc:
+            return f"[Error: Invalid regex '{query}': {exc}]"
+
+        from deepx.agent.repo_map import IGNORED_DIRS
+        import fnmatch
+
+        limit = max(1, min(int(max_results or 80), 300))
+        matches = []
+        searched_files = 0
+
+        if os.path.isfile(target_root):
+            files_to_scan = [target_root]
+        else:
+            files_to_scan = []
+            for root_str, dirs, files in os.walk(target_root):
+                dirs[:] = sorted(d for d in dirs if d not in IGNORED_DIRS)
+                for fname in sorted(files):
+                    if include and not fnmatch.fnmatch(fname, include):
+                        continue
+                    full_p = os.path.join(root_str, fname)
+                    if not self.is_protected(full_p):
+                        files_to_scan.append(full_p)
+
+        for file_path in files_to_scan:
+            if len(matches) >= limit:
+                break
+            try:
+                if os.path.getsize(file_path) > 1_500_000:
+                    continue
+                with open(file_path, "rb") as fb:
+                    sample = fb.read(2048)
+                if b"\x00" in sample:
+                    continue
+                with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
+                    searched_files += 1
+                    try:
+                        rel_path = os.path.relpath(file_path, self.cwd).replace("\\", "/")
+                    except Exception:
+                        rel_path = file_path
+                    for lineno, line_text in enumerate(f, 1):
+                        if pattern.search(line_text):
+                            snippet = line_text.rstrip("\r\n")
+                            if len(snippet) > 220:
+                                snippet = snippet[:217] + "..."
+                            matches.append(f"{rel_path}:{lineno}: {snippet}")
+                            if len(matches) >= limit:
+                                break
+            except Exception:
+                continue
+
+        if not matches:
+            return f"[No matches for '{query}' across {searched_files} files in '{path}']"
+        suffix = f"\n[Showing first {limit} matches]" if len(matches) >= limit else ""
+        return "\n".join(matches) + suffix
 
     def write_file(self, path: str, content: str) -> str:
-                                                                                    
         abs_path = os.path.abspath(os.path.join(self.cwd, path))
-        if self.is_protected(path):
+        if self.is_protected(path) or self.is_protected(abs_path):
             return self._deny(path)
-        filename = os.path.basename(path)
         existed = os.path.exists(abs_path)
-        old_line_count = 0
-
-        if existed:
-            try:
-                with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
-                    old_line_count = len(f.readlines())
-            except Exception:
-                pass
 
         try:
-            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-            if filename.endswith(".py") or "**" in content:
-                content = re.sub(r'\*\*([a-zA-Z0-9_]+)\*\*', r'__\1__', content)
+            os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
+            if getattr(self, "checkpoints", None) is not None:
+                self.checkpoints.record_before_modify(abs_path, "write_file")
             with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             new_line_count = len(content.splitlines())
             syntax_result = self._syntax_check_file(abs_path, content)
 
-            if not existed:
-                return (
-                    f"[Success: File '{path}' created "
-                    f"({new_line_count} lines, {len(content)} bytes)]{syntax_result}"
-                )
-            else:
-                added = max(0, new_line_count - old_line_count)
-                removed = max(0, old_line_count - new_line_count)
-                stats = []
-                if added > 0 or (added == 0 and removed == 0):
-                    stats.append(f"[bold #10B981]+{added}[/bold #10B981]")
-                if removed > 0:
-                    stats.append(f"[bold #EF4444]-{removed}[/bold #EF4444]")
-                stat_str = " ".join(stats)
-                return (
-                    f"[Success: File '{path}' updated "
-                    f"({new_line_count} lines, {len(content)} bytes)]{syntax_result}"
-                )
+            action_word = "updated" if existed else "created"
+            return (
+                f"[Success: File '{path}' {action_word} "
+                f"({new_line_count} lines, {len(content)} bytes)]{syntax_result}"
+            )
         except Exception as e:
             return f"[Error writing file '{path}': {e}]"
 
@@ -185,11 +246,9 @@ class FileSystemToolsMixin:
         start_line=None,
         end_line=None,
     ) -> str:
-                                                                                                
         abs_path = os.path.abspath(os.path.join(self.cwd, path))
-        if self.is_protected(path):
+        if self.is_protected(path) or self.is_protected(abs_path):
             return self._deny(path)
-        filename = os.path.basename(path)
         if not os.path.exists(abs_path):
             return f"[Error: File '{path}' does not exist]"
         try:
@@ -197,7 +256,6 @@ class FileSystemToolsMixin:
                 content = f.read()
 
             match_method = "exact match"
-            matched_target = target
             if start_line is not None or end_line is not None:
                 try:
                     start = int(start_line if start_line is not None else end_line)
@@ -226,69 +284,74 @@ class FileSystemToolsMixin:
                 suffix = "".join(source_lines[end:])
                 new_content = prefix + range_replacement + suffix
                 match_method = f"line range {start}-{end}"
-            elif target and target in content:
-                new_content = content.replace(target, replacement, 1)
             else:
-                if not target:
+                if not target or not str(target).strip():
                     return (
-                        f"[Error: edit_file requires either a non-empty target or "
-                        f"start_line/end_line for '{path}']"
+                        f"[Error: edit_file requires a non-empty, non-whitespace target "
+                        f"or start_line/end_line for '{path}']"
                     )
-                target_lines_normalized = [
-                    line.rstrip() for line in target.splitlines()
-                ]
-                source_lines = content.splitlines(keepends=True)
-                source_lines_normalized = [
-                    line.rstrip("\r\n").rstrip() for line in source_lines
-                ]
-                width = len(target_lines_normalized)
-                matches = [
-                    index
-                    for index in range(len(source_lines_normalized) - width + 1)
-                    if source_lines_normalized[index:index + width]
-                    == target_lines_normalized
-                ]
-                if not matches:
-                    return f"[Error: Target string not found in '{path}', including normalized matching]"
-                if len(matches) > 1:
-                    lines = ", ".join(str(index + 1) for index in matches[:10])
-                    return (
-                        f"[Error: Normalized target is ambiguous in '{path}' "
-                        f"(matches start at lines {lines}); use start_line/end_line]"
+                if target in content:
+                    occ = content.count(target)
+                    if occ > 1:
+                        line_nums = []
+                        pos = 0
+                        for _ in range(min(occ, 10)):
+                            idx = content.find(target, pos)
+                            if idx == -1:
+                                break
+                            line_nums.append(str(content[:idx].count("\n") + 1))
+                            pos = idx + len(target)
+                        return (
+                            f"[Error: Target string is ambiguous in '{path}' "
+                            f"({occ} occurrences at lines {', '.join(line_nums)}); "
+                            f"provide more context or use start_line/end_line]"
+                        )
+                    new_content = content.replace(target, replacement, 1)
+                else:
+                    target_lines_normalized = [line.rstrip() for line in target.splitlines()]
+                    if not target_lines_normalized or all(not ln.strip() for ln in target_lines_normalized):
+                        return f"[Error: Target string not found cleanly in '{path}']"
+                    source_lines = content.splitlines(keepends=True)
+                    source_lines_normalized = [
+                        line.rstrip("\r\n").rstrip() for line in source_lines
+                    ]
+                    width = len(target_lines_normalized)
+                    matches = [
+                        index
+                        for index in range(len(source_lines_normalized) - width + 1)
+                        if source_lines_normalized[index:index + width] == target_lines_normalized
+                    ]
+                    if not matches:
+                        return f"[Error: Target string not found in '{path}', including normalized matching]"
+                    if len(matches) > 1:
+                        lines = ", ".join(str(index + 1) for index in matches[:10])
+                        return (
+                            f"[Error: Normalized target is ambiguous in '{path}' "
+                            f"(matches start at lines {lines}); use start_line/end_line]"
+                        )
+                    index = matches[0]
+                    matched_target = "".join(source_lines[index:index + width])
+                    line_ending = "\r\n" if "\r\n" in matched_target else "\n"
+                    fuzzy_replacement = replacement
+                    if (
+                        fuzzy_replacement
+                        and matched_target.endswith(("\n", "\r"))
+                        and not fuzzy_replacement.endswith(("\n", "\r"))
+                        and index + width < len(source_lines)
+                    ):
+                        fuzzy_replacement += line_ending
+                    new_content = (
+                        "".join(source_lines[:index])
+                        + fuzzy_replacement
+                        + "".join(source_lines[index + width:])
                     )
-                index = matches[0]
-                matched_target = "".join(source_lines[index:index + width])
-                line_ending = "\r\n" if "\r\n" in matched_target else "\n"
-                fuzzy_replacement = replacement
-                if (
-                    fuzzy_replacement
-                    and matched_target.endswith(("\n", "\r"))
-                    and not fuzzy_replacement.endswith(("\n", "\r"))
-                    and index + width < len(source_lines)
-                ):
-                    fuzzy_replacement += line_ending
-                new_content = (
-                    "".join(source_lines[:index])
-                    + fuzzy_replacement
-                    + "".join(source_lines[index + width:])
-                )
-                match_method = f"normalized whitespace match at line {index + 1}"
+                    match_method = f"normalized whitespace match at line {index + 1}"
 
-            target_lines = len(matched_target.splitlines())
-            replacement_lines = len(replacement.splitlines())
-            diff = replacement_lines - target_lines
+            if getattr(self, "checkpoints", None) is not None:
+                self.checkpoints.record_before_modify(abs_path, "edit_file")
             with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             syntax_result = self._syntax_check_file(abs_path, new_content)
-
-            added = max(0, diff)
-            removed = max(0, -diff)
-            stats = []
-            if added > 0 or (added == 0 and removed == 0):
-                stats.append(f"[bold #10B981]+{added}[/bold #10B981]")
-            if removed > 0:
-                stats.append(f"[bold #EF4444]-{removed}[/bold #EF4444]")
-            stat_str = " ".join(stats)
 
             return (
                 f"[Success: File '{path}' updated successfully using {match_method}]"
@@ -298,9 +361,8 @@ class FileSystemToolsMixin:
             return f"[Error editing file '{path}': {e}]"
 
     def list_dir(self, path: str = ".") -> str:
-                                                    
         abs_path = os.path.abspath(os.path.join(self.cwd, path))
-        if self.is_protected(path):
+        if self.is_protected(path) or self.is_protected(abs_path):
             return self._deny(path)
         if not os.path.exists(abs_path):
             return f"[Error: Path '{path}' does not exist]"
@@ -310,8 +372,6 @@ class FileSystemToolsMixin:
             files = []
             for entry in entries:
                 full = os.path.join(abs_path, entry)
-                                                                                       
-                                                       
                 if self.is_protected(full):
                     continue
                 if os.path.isdir(full):
@@ -325,9 +385,8 @@ class FileSystemToolsMixin:
             return f"[Error listing directory '{path}': {e}]"
 
     def file_info(self, path: str) -> str:
-                                
         abs_path = os.path.abspath(os.path.join(self.cwd, path))
-        if self.is_protected(path):
+        if self.is_protected(path) or self.is_protected(abs_path):
             return self._deny(path)
         if not os.path.exists(abs_path):
             return f"[Error: File '{path}' does not exist]"
@@ -343,41 +402,108 @@ class FileSystemToolsMixin:
         except Exception as e:
             return f"[Error retrieving info for '{path}': {e}]"
 
-    def zip_pack(self, zip_path: str, files: list) -> str:
-                                              
-        abs_zip = os.path.abspath(os.path.join(self.cwd, zip_path))
+    def zip_pack(self, zip_path: str, files) -> str:
         import zipfile
+
+        abs_zip = os.path.abspath(os.path.join(self.cwd, zip_path))
+        if self.is_protected(zip_path) or self.is_protected(abs_zip):
+            return self._deny(zip_path)
+
+        if isinstance(files, str):
+            file_items = [files]
+        elif isinstance(files, (list, tuple)):
+            file_items = list(files)
+        else:
+            return "[Error: zip_pack 'files' must be a path or list of paths]"
+
+        for item in file_items:
+            raw_item = str(item or "").strip()
+            if not raw_item:
+                continue
+            abs_f = os.path.abspath(os.path.join(self.cwd, raw_item))
+            if self.is_protected(raw_item) or self.is_protected(abs_f):
+                return self._deny(raw_item)
+
         try:
-            os.makedirs(os.path.dirname(abs_zip), exist_ok=True)
-            if self.is_protected(zip_path):
-                return self._deny(zip_path)
+            zip_dir = os.path.dirname(abs_zip)
+            if zip_dir:
+                os.makedirs(zip_dir, exist_ok=True)
             packed = 0
             skipped = 0
-            with zipfile.ZipFile(abs_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for f in files:
-                    abs_f = os.path.abspath(os.path.join(self.cwd, f))
-                    if self.is_protected(f):
+            cwd_real = os.path.realpath(self.cwd)
+            zip_real = os.path.realpath(abs_zip)
+
+            with zipfile.ZipFile(abs_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for item in file_items:
+                    raw_item = str(item or "").strip()
+                    if not raw_item:
                         skipped += 1
                         continue
-                    if os.path.exists(abs_f):
-                        zipf.write(abs_f, arcname=os.path.basename(f))
-                        packed += 1
-                    else:
+                    abs_f = os.path.abspath(os.path.join(self.cwd, raw_item))
+                    if self.is_protected(raw_item) or self.is_protected(abs_f):
+                        return self._deny(raw_item)
+                    if not os.path.exists(abs_f):
                         skipped += 1
+                        continue
+
+                    if os.path.isdir(abs_f):
+                        base_parent = os.path.dirname(os.path.abspath(abs_f))
+                        for root_dir, dirs, dir_files in os.walk(abs_f):
+                            dirs[:] = [
+                                d for d in sorted(dirs)
+                                if not self.is_protected(os.path.join(root_dir, d))
+                            ]
+                            for fname in sorted(dir_files):
+                                full_child = os.path.join(root_dir, fname)
+                                if os.path.realpath(full_child) == zip_real:
+                                    continue
+                                if self.is_protected(full_child):
+                                    skipped += 1
+                                    continue
+                                try:
+                                    arc = os.path.relpath(full_child, cwd_real)
+                                    if arc.startswith(".."):
+                                        arc = os.path.relpath(full_child, base_parent)
+                                except Exception:
+                                    arc = os.path.relpath(full_child, base_parent)
+                                zipf.write(full_child, arcname=arc.replace("\\", "/"))
+                                packed += 1
+                    else:
+                        if os.path.realpath(abs_f) == zip_real:
+                            continue
+                        try:
+                            arc = os.path.relpath(abs_f, cwd_real)
+                            if arc.startswith(".."):
+                                arc = os.path.basename(abs_f)
+                        except Exception:
+                            arc = os.path.basename(abs_f)
+                        zipf.write(abs_f, arcname=arc.replace("\\", "/"))
+                        packed += 1
+
             note = f", {skipped} skipped (missing or protected)" if skipped else ""
             return f"[Success: ZIP archive '{zip_path}' created with {packed} file(s){note}]"
         except Exception as e:
             return f"[Error creating ZIP archive: {e}]"
 
     def unzip_pack(self, zip_path: str, extract_to: str = ".") -> str:
-                                  
+        import zipfile
+
         abs_zip = os.path.abspath(os.path.join(self.cwd, zip_path))
         abs_dest = os.path.abspath(os.path.join(self.cwd, extract_to))
-        import zipfile
-        if self.is_protected(zip_path) or self.is_protected(extract_to):
-            return self._deny(zip_path if self.is_protected(zip_path) else extract_to)
+        if self.is_protected(zip_path) or self.is_protected(abs_zip):
+            return self._deny(zip_path)
+        if self.is_protected(extract_to) or self.is_protected(abs_dest):
+            return self._deny(extract_to)
         try:
-            with zipfile.ZipFile(abs_zip, 'r') as zipf:
+            dest_real = os.path.realpath(abs_dest)
+            os.makedirs(abs_dest, exist_ok=True)
+            with zipfile.ZipFile(abs_zip, "r") as zipf:
+                for info in zipf.infolist():
+                    target_member = os.path.realpath(os.path.join(dest_real, info.filename))
+                    if not (target_member == dest_real or target_member.startswith(dest_real + os.sep)):
+                        return f"[Security Blocked: Unsafe path in archive '{info.filename}']"
+                    if self.is_protected(target_member):
+                        return self._deny(info.filename)
                 zipf.extractall(abs_dest)
             return f"[Success: ZIP archive '{zip_path}' extracted to '{extract_to}']"
         except Exception as e:

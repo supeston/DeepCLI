@@ -4,6 +4,7 @@ import json
 import os
 import posixpath
 import re
+import shlex
 import socket
 import sys
 import time
@@ -185,6 +186,15 @@ class VDSToolsMixin:
     def vds_pool(self) -> VDSConnectionPool:
         return _GLOBAL_VDS_POOL
 
+    def _is_vds_protected_local_path(self, path: Optional[str]) -> Optional[str]:
+        if not path or not getattr(self, "protect_self", False):
+            return None
+        checker = getattr(self, "is_protected", None)
+        if callable(checker) and checker(path):
+            deny_fn = getattr(self, "_deny", None)
+            return deny_fn(path) if callable(deny_fn) else f"[Access denied: '{path}' is protected]"
+        return None
+
     def _get_vds_profiles_path(self) -> str:
         base_dir = getattr(self, "cwd", os.getcwd())
         deepx_dir = os.path.join(base_dir, ".deepx")
@@ -254,6 +264,10 @@ class VDSToolsMixin:
         if not config.get("host"):
             return {}, "No VDS host specified. Provide 'host' in args, save a profile via action='save_profile', or set VDS_HOST in .env."
 
+        denied_key = self._is_vds_protected_local_path(config.get("key_path"))
+        if denied_key:
+            return {}, denied_key
+
         config.setdefault("port", 22)
         config.setdefault("username", "root")
         return config, None
@@ -284,17 +298,24 @@ class VDSToolsMixin:
 
         # Profile management actions (local only)
         if action == "save_profile":
+            denied_profiles = self._is_vds_protected_local_path(self._get_vds_profiles_path())
+            if denied_profiles:
+                return denied_profiles
             name = kwargs.get("name") or kwargs.get("profile") or "default"
             host = kwargs.get("host")
             if not host:
                 return "[Error: 'host' is required to save a VDS profile]"
+            key_path_arg = kwargs.get("key_path") or kwargs.get("key_file")
+            denied_key = self._is_vds_protected_local_path(key_path_arg)
+            if denied_key:
+                return denied_key
             profiles = self._load_vds_profiles()
             profiles[name] = {
                 "host": host,
                 "port": int(kwargs.get("port", 22)),
                 "username": kwargs.get("username") or kwargs.get("user") or "root",
                 "password": kwargs.get("password"),
-                "key_path": kwargs.get("key_path") or kwargs.get("key_file"),
+                "key_path": key_path_arg,
             }
             # Clean None values
             profiles[name] = {k: v for k, v in profiles[name].items() if v is not None}
@@ -302,6 +323,8 @@ class VDSToolsMixin:
             return f"[OK: VDS profile '{name}' saved successfully ({profiles[name].get('username')}@{host}:{profiles[name].get('port')})]"
 
         elif action == "list_profiles":
+            if self._is_vds_protected_local_path(self._get_vds_profiles_path()):
+                return self._deny(self._get_vds_profiles_path())
             profiles = self._load_vds_profiles()
             if not profiles:
                 return "[VDS Profiles: No saved profiles found. You can add one with action='save_profile']"
@@ -312,6 +335,8 @@ class VDSToolsMixin:
             return "\n".join(lines)
 
         elif action == "remove_profile":
+            if self._is_vds_protected_local_path(self._get_vds_profiles_path()):
+                return self._deny(self._get_vds_profiles_path())
             name = kwargs.get("name") or kwargs.get("profile")
             if not name:
                 return "[Error: 'name' or 'profile' is required to remove a profile]"
@@ -391,7 +416,7 @@ class VDSToolsMixin:
             uptime = out[2] if len(out) > 2 else "running"
 
             return (
-                f"✅ **VDS Connected Successfully!**\n"
+                f"**VDS Connected Successfully**\n"
                 f"• **Target:** `{username}@{host}:{port}`\n"
                 f"• **Latency:** `{latency_ms} ms`\n"
                 f"• **OS / Distro:** {os_name} ({uname})\n"
@@ -399,7 +424,7 @@ class VDSToolsMixin:
                 f"• **Session:** Active (connection cached for subsequent sub-second operations)"
             )
         except Exception as e:
-            return f"✅ VDS Connected (`{username}@{host}:{port}`, latency: {latency_ms} ms), but probe command returned: {e}"
+            return f"VDS Connected (`{username}@{host}:{port}`, latency: {latency_ms} ms), but probe command returned: {e}"
 
     def _vds_exec(
         self, host: str, port: int, username: str, password: Optional[str],
@@ -422,14 +447,19 @@ class VDSToolsMixin:
 
         cmd_to_run = str(command).strip()
         if cwd:
-            cmd_to_run = f"cd {posixpath.normpath(str(cwd))} && {cmd_to_run}"
+            cmd_to_run = f"cd {shlex.quote(posixpath.normpath(str(cwd)))} && {cmd_to_run}"
 
         if env and isinstance(env, dict):
-            env_prefix = " ".join(f"{k}={json.dumps(str(v))}" for k, v in env.items())
-            cmd_to_run = f"export {env_prefix} && {cmd_to_run}"
+            env_parts = [
+                f"{k}={shlex.quote(str(v))}"
+                for k, v in env.items()
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(k))
+            ]
+            if env_parts:
+                cmd_to_run = f"export {' '.join(env_parts)} && {cmd_to_run}"
 
         if sudo and username != "root":
-            cmd_to_run = f"sudo -S -p '' bash -c {json.dumps(cmd_to_run)}"
+            cmd_to_run = f"sudo -S -p '' bash -c {shlex.quote(cmd_to_run)}"
 
         start_time = time.time()
         try:
@@ -487,14 +517,18 @@ class VDSToolsMixin:
             # Execute script
             cwd = kwargs.get("cwd")
             sudo = kwargs.get("sudo", False)
-            exec_cmd = f"bash -e {remote_temp_script}"
+            exec_cmd = f"bash -e {shlex.quote(remote_temp_script)}"
             if cwd:
-                exec_cmd = f"cd {posixpath.normpath(str(cwd))} && {exec_cmd}"
-            if sudo and username != "root":
-                exec_cmd = f"sudo {exec_cmd}"
+                exec_cmd = f"cd {shlex.quote(posixpath.normpath(str(cwd)))} && {exec_cmd}"
+            use_sudo = bool(sudo and username != "root")
+            if use_sudo:
+                exec_cmd = f"sudo -S -p '' bash -c {shlex.quote(exec_cmd)}"
 
             start_time = time.time()
-            stdin, stdout, stderr = client.exec_command(exec_cmd, timeout=timeout)
+            stdin, stdout, stderr = client.exec_command(exec_cmd, timeout=timeout, get_pty=use_sudo)
+            if use_sudo and password:
+                stdin.write(f"{password}\n")
+                stdin.flush()
             out = stdout.read().decode("utf-8", errors="replace")
             err_out = stderr.read().decode("utf-8", errors="replace")
             exit_code = stdout.channel.recv_exit_status()
@@ -534,6 +568,9 @@ class VDSToolsMixin:
             return "[Error: 'local_path' and 'remote_path' are required for action='upload']"
 
         local_abs = os.path.abspath(os.path.join(getattr(self, "cwd", os.getcwd()), str(local_path)))
+        denied = self._is_vds_protected_local_path(local_abs)
+        if denied:
+            return denied
         if not os.path.exists(local_abs):
             return f"[Error: Local path not found: '{local_path}' (resolved: {local_abs})]"
 
@@ -543,14 +580,24 @@ class VDSToolsMixin:
         if err or sftp is None:
             return f"[VDS SFTP Error: {err}]"
 
+        raw_exclude = kwargs.get("exclude") or []
+        if isinstance(raw_exclude, str):
+            raw_exclude = [raw_exclude]
+        extra_excludes = {str(item).strip().strip("/\\") for item in raw_exclude if str(item).strip()}
+        default_excludes = {
+            ".git", "__pycache__", ".venv", "venv", "node_modules",
+            ".idea", ".vscode", ".deepx_history", ".pytest_cache",
+        } | extra_excludes
+
+        def should_exclude_name(name: str) -> bool:
+            return name in default_excludes or name.endswith((".pyc", ".pyo"))
+
         def should_exclude(rel_path: str) -> bool:
+            norm = rel_path.replace("\\", "/").strip("/")
+            if norm in extra_excludes:
+                return True
             parts = Path(rel_path).parts
-            for p in parts:
-                if p in (".git", "__pycache__", ".venv", "node_modules", ".idea", ".vscode"):
-                    return True
-                if p.endswith(".pyc"):
-                    return True
-            return False
+            return any(should_exclude_name(p) for p in parts)
 
         remote_dest = posixpath.normpath(str(remote_path))
         start_time = time.time()
@@ -574,6 +621,11 @@ class VDSToolsMixin:
                 # Directory upload
                 self._sftp_mkdir_p(sftp, remote_dest)
                 for root, dirs, files in os.walk(local_abs):
+                    dirs[:] = [
+                        d for d in dirs
+                        if not should_exclude_name(d)
+                        and not self._is_vds_protected_local_path(os.path.join(root, d))
+                    ]
                     rel_dir = os.path.relpath(root, local_abs)
                     if rel_dir != ".":
                         if should_exclude(rel_dir):
@@ -586,6 +638,8 @@ class VDSToolsMixin:
                         if should_exclude(rel_file):
                             continue
                         cur_local_file = os.path.join(root, file)
+                        if self._is_vds_protected_local_path(cur_local_file):
+                            continue
                         cur_remote_file = posixpath.join(remote_dest, rel_file.replace("\\", "/"))
                         cur_remote_dir = posixpath.dirname(cur_remote_file)
                         self._sftp_mkdir_p(sftp, cur_remote_dir)
@@ -597,7 +651,7 @@ class VDSToolsMixin:
             elapsed = round(time.time() - start_time, 2)
             size_mb = round(total_bytes / (1024 * 1024), 2)
             return (
-                f"✅ **SFTP Upload Completed!**\n"
+                f"**SFTP Upload Completed**\n"
                 f"• **Source:** `{local_path}`\n"
                 f"• **Destination:** `{username}@{host}:{remote_dest}`\n"
                 f"• **Files Uploaded:** {file_count} ({size_mb} MB)\n"
@@ -617,6 +671,9 @@ class VDSToolsMixin:
             return "[Error: 'remote_path' and 'local_path' are required for action='download']"
 
         local_abs = os.path.abspath(os.path.join(getattr(self, "cwd", os.getcwd()), str(local_path)))
+        denied = self._is_vds_protected_local_path(local_abs)
+        if denied:
+            return denied
         os.makedirs(os.path.dirname(local_abs), exist_ok=True)
 
         sftp, err = self.vds_pool.get_sftp(
@@ -632,7 +689,7 @@ class VDSToolsMixin:
             size_bytes = os.path.getsize(local_abs)
             elapsed = round(time.time() - start_time, 2)
             return (
-                f"✅ **SFTP Download Completed!**\n"
+                f"**SFTP Download Completed**\n"
                 f"• **Remote Source:** `{username}@{host}:{remote_target}`\n"
                 f"• **Local File:** `{local_path}` ({size_bytes} bytes)\n"
                 f"• **Duration:** {elapsed}s"
@@ -665,14 +722,17 @@ class VDSToolsMixin:
             data = content.encode("utf-8")
             sftp.putfo(io.BytesIO(data), remote_target)
             mode = kwargs.get("mode")
-            if mode:
-                if isinstance(mode, str) and mode.startswith("0o"):
-                    mode_int = int(mode, 8)
+            if mode is not None and str(mode).strip():
+                mode_str = str(mode).strip().lower()
+                if mode_str.startswith("0o"):
+                    mode_int = int(mode_str, 8)
+                elif re.fullmatch(r"[0-7]{3,4}", mode_str):
+                    mode_int = int(mode_str, 8)
                 else:
                     mode_int = int(mode)
                 sftp.chmod(remote_target, mode_int)
 
-            return f"✅ [OK: Written {len(data)} bytes to remote file '{remote_target}' on {username}@{host}]"
+            return f"[OK: Written {len(data)} bytes to remote file '{remote_target}' on {username}@{host}]"
         except Exception as e:
             return f"[Error writing remote file: {e}]"
 
@@ -692,8 +752,8 @@ class VDSToolsMixin:
             return f"[VDS SFTP Error: {err}]"
 
         remote_target = posixpath.normpath(str(remote_path))
-        start_line = int(kwargs.get("start_line", 1))
-        end_line = int(kwargs.get("end_line", 500))
+        start_line = max(1, int(kwargs.get("start_line", 1)))
+        end_line = max(start_line, int(kwargs.get("end_line", 500)))
 
         try:
             buf = io.BytesIO()
@@ -703,7 +763,7 @@ class VDSToolsMixin:
             lines = text.splitlines()
             total_lines = len(lines)
 
-            slice_lines = lines[max(0, start_line - 1):end_line]
+            slice_lines = lines[start_line - 1:end_line]
             formatted_lines = [
                 f"{i + start_line}: {line}" for i, line in enumerate(slice_lines)
             ]
@@ -765,7 +825,7 @@ class VDSToolsMixin:
 
             out_buf = io.BytesIO(new_text.encode("utf-8"))
             sftp.putfo(out_buf, remote_target)
-            return f"✅ [OK: Successfully edited remote file '{remote_target}' on {username}@{host} ({count} occurrence(s) replaced)]"
+            return f"[OK: Successfully edited remote file '{remote_target}' on {username}@{host} ({count} occurrence(s) replaced)]"
         except FileNotFoundError:
             return f"[Error: Remote file not found: '{remote_target}']"
         except Exception as e:
@@ -782,22 +842,23 @@ class VDSToolsMixin:
             return "[Error: 'service' name is required for action='service']"
 
         op = op.lower().strip()
-        lines = int(kwargs.get("lines", 50))
-        sudo_prefix = "sudo " if (username != "root" and kwargs.get("sudo", False)) else ""
+        lines = max(1, int(kwargs.get("lines", 50)))
+        quoted_service = shlex.quote(str(service_name).strip())
 
         if op in ("start", "stop", "restart", "reload", "enable", "disable"):
-            cmd = f"{sudo_prefix}systemctl {op} {service_name} && systemctl status {service_name} --no-pager"
+            cmd = f"systemctl {op} {quoted_service} && systemctl status {quoted_service} --no-pager"
         elif op in ("status", "check"):
-            cmd = f"systemctl status {service_name} --no-pager"
+            cmd = f"systemctl status {quoted_service} --no-pager"
         elif op in ("logs", "log", "journal"):
-            cmd = f"{sudo_prefix}journalctl -u {service_name} -n {lines} --no-pager"
+            cmd = f"journalctl -u {quoted_service} -n {lines} --no-pager"
         elif op in ("daemon_reload", "daemon-reload"):
-            cmd = f"{sudo_prefix}systemctl daemon-reload"
+            cmd = "systemctl daemon-reload"
         else:
             return f"[Error: Unknown service operation '{op}'. Supported: start, stop, restart, reload, enable, disable, status, logs, daemon-reload]"
 
-        kwargs["command"] = cmd
-        return self._vds_exec(host, port, username, password, key_path, key_content, passphrase, timeout, kwargs)
+        exec_kwargs = dict(kwargs)
+        exec_kwargs["command"] = cmd
+        return self._vds_exec(host, port, username, password, key_path, key_content, passphrase, timeout, exec_kwargs)
 
     def _vds_docker(
         self, host: str, port: int, username: str, password: Optional[str],
@@ -859,48 +920,53 @@ class VDSToolsMixin:
             host, port, username, password, key_path, key_content, passphrase, timeout,
             {"local_path": local_path, "remote_path": remote_path, "exclude": kwargs.get("exclude")}
         )
-        if "[Error" in upload_res:
-            return f"❌ Quick Deploy Failed at Upload Step:\n{upload_res}"
-        report_steps.append("   ✔ Files synchronized successfully.")
+        if "[Error" in upload_res or "[VDS SFTP Error" in upload_res or "[Access denied" in upload_res:
+            return f"Quick Deploy Failed at Upload Step:\n{upload_res}"
+        report_steps.append("   [OK] Files synchronized successfully.")
 
         # Step 2: Build / Setup commands
+        use_sudo = bool(kwargs.get("sudo", False))
         if build_commands:
             report_steps.append("2. **Executing build / setup commands...**")
             for idx, cmd in enumerate(build_commands, 1):
                 res = self._vds_exec(
                     host, port, username, password, key_path, key_content, passphrase, timeout,
-                    {"command": cmd, "cwd": remote_path, "sudo": kwargs.get("sudo", False)}
+                    {"command": cmd, "cwd": remote_path, "sudo": use_sudo}
                 )
-                if "[Exit Code:" in res:
-                    return f"❌ Quick Deploy Failed at Build Command Step ({cmd}):\n{res}"
-                report_steps.append(f"   ✔ Command #{idx} succeeded: `{cmd}`")
+                if "[Exit Code:" in res or "[Error" in res or "[VDS Connection Error" in res:
+                    return f"Quick Deploy Failed at Build Command Step ({cmd}):\n{res}"
+                report_steps.append(f"   [OK] Command #{idx} succeeded: `{cmd}`")
 
         # Step 3: Service / Docker restart
         if docker_compose:
             report_steps.append("3. **Starting Docker Compose stack...**")
             dock_res = self._vds_docker(
                 host, port, username, password, key_path, key_content, passphrase, timeout,
-                {"operation": "up", "cwd": remote_path}
+                {"operation": "up", "cwd": remote_path, "sudo": use_sudo}
             )
-            report_steps.append(f"   ✔ Docker status:\n```\n{dock_res}\n```")
+            if "[Exit Code:" in dock_res or "[Error" in dock_res or "[VDS Connection Error" in dock_res:
+                return f"Quick Deploy Failed at Docker Step:\n{dock_res}"
+            report_steps.append(f"   [OK] Docker status:\n```\n{dock_res}\n```")
         elif service_name:
             report_steps.append(f"3. **Restarting Systemd service `{service_name}`...**")
             srv_res = self._vds_service(
                 host, port, username, password, key_path, key_content, passphrase, timeout,
-                {"service": service_name, "operation": "restart"}
+                {"service": service_name, "operation": "restart", "sudo": use_sudo}
             )
-            report_steps.append(f"   ✔ Service status:\n```\n{srv_res}\n```")
+            if "[Exit Code:" in srv_res or "[Error" in srv_res or "[VDS Connection Error" in srv_res:
+                return f"Quick Deploy Failed at Service Restart Step ({service_name}):\n{srv_res}"
+            report_steps.append(f"   [OK] Service status:\n```\n{srv_res}\n```")
 
         # Step 4: Healthcheck
         if healthcheck_url:
             report_steps.append(f"4. **Checking healthcheck endpoint `{healthcheck_url}`...**")
             check_res = self._vds_exec(
                 host, port, username, password, key_path, key_content, passphrase, 15,
-                {"command": f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 10 {healthcheck_url}"}
+                {"command": f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 10 {shlex.quote(str(healthcheck_url))}"}
             )
             report_steps.append(f"   • HTTP Response Code: `{check_res.strip()}`")
 
-        return "🚀 **Quick Deployment Pipeline Succeeded!**\n\n" + "\n".join(report_steps)
+        return "**Quick Deployment Pipeline Succeeded**\n\n" + "\n".join(report_steps)
 
     def _vds_sys_info(
         self, host: str, port: int, username: str, password: Optional[str],
@@ -922,6 +988,6 @@ class VDSToolsMixin:
         try:
             stdin, stdout, stderr = client.exec_command(sys_cmd, timeout=15)
             out = stdout.read().decode("utf-8", errors="replace")
-            return f"📊 **Remote Server Diagnostics (`{username}@{host}:{port}`)**:\n```\n{out.strip()}\n```"
+            return f"**Remote Server Diagnostics (`{username}@{host}:{port}`)**:\n```\n{out.strip()}\n```"
         except Exception as e:
             return f"[Error fetching remote system info: {e}]"

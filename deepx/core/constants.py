@@ -1,40 +1,4 @@
-import asyncio
-import concurrent.futures
-import ctypes
-import difflib
-from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
-import json
-import os
-import py_compile
-import re
-import shutil
-import signal
-import subprocess
-import sys
-import textwrap
-import unicodedata
-from pathlib import Path
-
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
-from deepx.tools.dadata_osint import DadataOSINTTool
-from deepx.tools.funstat_osint import FunstatOSINTTool
+# Core runtime limits & protocol constants
 
                                                                                 
                     
@@ -67,15 +31,18 @@ AGENT_EXECUTION_PROTOCOL = """
 5. Финальный ответ разрешён только когда исходная цель выполнена и это
    подтверждается результатами инструментов. Если проверка невозможна, честно
    назови непроверенную часть вместо заявления об успехе.
-6. МНОГОСТРОЧНЫЙ КОД: Для полей code, content, target, replacement ВСЕГДА 
-   используй тройные кавычки \"\"\" вместо обычных \". Это позволяет писать код
-   нормально, каждую строку с новой строки. ЗАПРЕЩЕНО писать код в одну строку 
-   через \n! Пример: "content": \"\"\"\nprint('hello')\nprint('world')\n\"\"\"
-7. ЗАПРЕТ ХОЛОСТЫХ ОБЕЩАНИЙ: Никогда не завершай сообщение словами «сейчас проверю»,
+6. МНОГОСТРОЧНЫЙ КОД: Для полей code, content, target, replacement, script ВСЕГДА
+   используй тройные кавычки \"\"\" вместо обычных ". Это позволяет писать код
+   нормально, каждую строку с новой строки. ЗАПРЕЩЕНО писать код в одну строку
+   через \\n! Пример: "content": \"\"\"\nprint('hello')\nprint('world')\n\"\"\"
+7. ТОЧЕЧНЫЙ ПОИСК И ОКРУЖЕНИЕ: Используй grep_search для быстрого поиска по коду
+   вместо чтения множества файлов целиком. При нехватке зависимости
+   (ModuleNotFoundError/ImportError) сразу установи пакет через run_cmd и продолжи.
+   Независимые чтения (read_file, grep_search, list_dir) вызывай батчем за один ход.
+8. ЗАПРЕТ ХОЛОСТЫХ ОБЕЩАНИЙ: Никогда не завершай сообщение словами «сейчас проверю»,
    «установлю», «проверю менеджеры» и т.п. без одновременного вызова ```tool_call.
    Если требуется действие — СРАЗУ вызывай нужный инструмент в этом же ответе.
-Не пересказывай внутренний ход рассуждений. Показывай пользователю действия,
-проверяемые результаты и выводы.
+Не пересказывай внутренний ход рассуждений. Пиши кратко, по делу, без эмодзи и без дублирования содержимого файлов или JSON в тексте.
 """.strip()
 
 MUTATING_TOOLS_REQUIRING_VERIFICATION = {
@@ -90,6 +57,7 @@ MUTATING_TOOLS_REQUIRING_VERIFICATION = {
 
 VERIFICATION_TOOLS = {
     "read_file",
+    "grep_search",
     "file_info",
     "inspect_media",
     "run_cmd",
@@ -106,6 +74,7 @@ VERIFICATION_TOOLS = {
 # Mutating tools remain ordering barriers so a later read observes earlier writes.
 PARALLEL_READ_ONLY_TOOLS = {
     "read_file",
+    "grep_search",
     "file_info",
     "inspect_media",
     "read_clipboard",
@@ -129,22 +98,20 @@ FILE_VISUAL_TOOL_NAMES = {
     "make_pptx",
 }
 
-# Adaptive streaming: speed adjusts based on how far behind the console is
-# relative to the model's output.  When buffer is small (we're caught up),
-# use the slow "typewriter" delay for visual effect.  When buffer is large
-# (model is ahead), ramp down to zero delay so we catch up quickly.
-STREAM_CHAR_DELAY_MAX = 0.004       # per-char delay when fully caught up
-STREAM_PUNCTUATION_DELAY = 0.008    # extra pause on sentence-ending chars
-STREAM_ADAPTIVE_THRESHOLD = 60      # chars remaining below which we animate
-STREAM_BULK_CHUNK = 120             # when far behind, write this many chars at once
+STREAM_CHAR_DELAY_MAX = 0.004
+STREAM_PUNCTUATION_DELAY = 0.008
+STREAM_ADAPTIVE_THRESHOLD = 60
+STREAM_BULK_CHUNK = 120
 SELF_PROTECTED_FILES = {
     "deep_cli.py",
     "deep_api.py",
     "dadata_osint.py",
     "funstat_osint.py",
     "run_cli.vbs",
+    "tool_parser.py",
+    "vds_profiles.json",
 }
-                                                                                   
+
 SELF_PROTECTED_PREFIXES = ("system_prompt", ".deepx", ".env", "state.json")
-                                         
+
 SELF_PROTECTED_DIRS = {"__pycache__"}

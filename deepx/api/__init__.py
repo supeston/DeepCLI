@@ -1,4 +1,3 @@
-﻿from .deep_api import DeepAPI
+from .deep_api import DeepAPI
 
 __all__ = ['DeepAPI']
-

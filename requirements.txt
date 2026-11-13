@@ -2,29 +2,35 @@
 rich>=13.7.0
 prompt_toolkit>=3.0.40
 pyperclip>=1.8.2
+Pygments>=2.17.0
 
 # Browser Automation & Stealth
 playwright>=1.40.0
-playwright-stealth>=2.0.0
+playwright-stealth>=2.0.0,<3.0.0
 
-# Networking, SSH & Remote Deployment
+# Networking, HTTP, Scraping, SSH & Remote Deployment
 requests>=2.31.0
+httpx>=0.27.0
+beautifulsoup4>=4.12.0
 python-dotenv>=1.0.0
 paramiko>=3.4.0
 
-# Document Processing (Office Suite)
+# Document & PDF Processing (Office Suite)
 openpyxl>=3.1.2
 pandas>=2.0.0
 python-docx>=1.1.0
 python-pptx>=0.6.23
+pypdf>=4.0.0
 
-# Media & Clipboard Inspection
+# Media, OSINT & Clipboard Inspection
 Pillow>=10.0.0
 pymediainfo>=6.1.0
+funstat-api>=0.2.0
 pywin32>=306; sys_platform == 'win32'
 winsdk>=1.0.0b10; sys_platform == 'win32'
 
 # ConPTY Pseudo-Terminal
 pywinpty>=2.0.0; sys_platform == 'win32'
 
-
+# Testing
+pytest>=8.0.0

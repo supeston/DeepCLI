@@ -1,64 +1,33 @@
-import asyncio
-import concurrent.futures
-import ctypes
-import difflib
-from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
-import json
 import os
-import py_compile
-import re
-import shutil
-import signal
-import subprocess
-import sys
-import textwrap
-import unicodedata
-from pathlib import Path
-
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
-from deepx.tools.dadata_osint import DadataOSINTTool
-from deepx.tools.funstat_osint import FunstatOSINTTool
 
 from deepx.core.constants import *
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 COMMANDS_DICT = {
-    "mode": "Switch model mode (Instant, Expert, Vision) -> Auto-creates new chat",
-    "style": "Switch agent style and toolset (Coder, Universal, OSINTer)",
+    "mode": "Switch thinking/execution mode (instant, think, plan)",
+    "style": "Switch agent style (coder, universal, osinter)",
     "think": "Toggle DeepThink reasoning engine (ON / OFF)",
-    "search": "Toggle Smart Web Search (ON / OFF) [Instant mode only]",
+    "search": "Toggle Smart Web Search (ON / OFF)",
+    "cd": "Change active working directory",
+    "compact": "Compact old tool outputs in current chat history",
+    "undo": "Restore files modified in the last agent turn",
     "menu": "Open interactive TUI settings menu",
     "new": "Start a fresh session context",
     "status": "Display active session parameters",
+    "update": "Check for updates and install latest version from GitHub",
     "stealth": "Check playwright-stealth version and browser fingerprint signals",
     "copy": "Copy last response to clipboard",
     "clear": "Clear terminal screen",
     "help": "Display command list and shortcuts",
-    "exit": "Quit DEEPX CLI"
+    "exit": "Quit DEEPX CLI",
 }
 
 TOOL_DESCRIPTIONS = {
     "run_background_cmd": '- run_background_cmd: {"command":"long-running command","inputs":"optional stdin"}. Starts immediately and returns a task id.',
     "task_status": '- task_status: {"id":"task-0001"}. Returns background process status, PID and exit code.',
     "task_log": '- task_log: {"id":"task-0001","tail_lines":200}. Returns current stdout/stderr from a background process.',
+    "kill_background_cmd": '- kill_background_cmd: {"id":"task-0001"}. Stops a running background process started with run_background_cmd.',
     "run_cmd": '- run_cmd: {"command": "команда", "inputs": "опциональный stdin"}. Запускает команду в интерактивном псевдотерминале ConPTY (cmd.exe, chcp 65001). Если процесс запрашивает подтверждение/ввод, возвращает статус WAITING_FOR_INPUT для ответа через send_input. Для фоновых демонов и серверов используй run_background_cmd.',
     "send_input": '- send_input: {"session_id": "pty_0001", "text": "y\\n"}. Отправляет строку ввода или подтверждения в активный интерактивный терминал ConPTY.',
     "kill_cmd": '- kill_cmd: {"session_id": "pty_0001"}. Принудительно завершает активную сессию терминала ConPTY (Ctrl+C / terminate).',
@@ -67,6 +36,7 @@ TOOL_DESCRIPTIONS = {
     "write_file": '- write_file: {"path": "файл", "content": "многострочный текст или код\nкаждой строкой\nс новой строки"}',
     "edit_file": '- edit_file: {"path": "файл", "target": "старый многострочный\nтекст", "replacement": "новый многострочный\nтекст"}',
     "list_dir": '- list_dir: {"path": "папка"}',
+    "grep_search": '- grep_search: {"pattern": "текст или regex", "path": ".", "include": "*.py", "max_results": 60, "case_sensitive": false}. Быстрый точечный поиск совпадений по файлам проекта.',
     "file_info": '- file_info: {"path": "файл"}',
     "project_memory": """- project_memory: постоянная память текущего проекта в .deepx_project_memory.json.
   {"action":"get"} — прочитать цель, факты, завершённые шаги, файлы и последние события.
@@ -202,10 +172,10 @@ WantedBy=multi-user.target
 }
 
 COMMON_FILE_TOOLS = {
-    "read_file", "write_file", "edit_file", "list_dir", "file_info", "project_memory",
+    "read_file", "write_file", "edit_file", "list_dir", "grep_search", "file_info", "project_memory",
     "todo", "inspect_media", "read_clipboard", "write_clipboard",
     "get_clipboard_history", "get_clipboard_item", "set_clipboard", "delete_clipboard_item", "clear_clipboard_history",
-    "send_input", "kill_cmd", "vds_deploy",
+    "send_input", "kill_cmd",
 }
 
 STYLE_CONFIGS = {
@@ -213,7 +183,7 @@ STYLE_CONFIGS = {
         "label": "CODER",
         "description": "Разработка, файлы, Python, команды, веб-поиск и автономный браузер",
         "tools": COMMON_FILE_TOOLS | {
-            "run_cmd", "run_python", "run_background_cmd", "task_status", "task_log",
+            "run_cmd", "run_python", "run_background_cmd", "task_status", "task_log", "kill_background_cmd",
             "sys_info", "web_search", "fetch_url", "browser_action",
             "render_plan", "zip_pack", "unzip_pack", "vds_deploy",
         },
@@ -237,7 +207,7 @@ STYLE_CONFIGS = {
         "label": "UNIVERSAL",
         "description": "Универсальный помощник, тексты, аналитика, генерация документов, Python и веб-поиск",
         "tools": COMMON_FILE_TOOLS | {
-            "run_cmd", "run_python", "run_background_cmd", "task_status", "task_log",
+            "run_cmd", "run_python", "run_background_cmd", "task_status", "task_log", "kill_background_cmd",
             "sys_info", "web_search", "fetch_url", "browser_action", "render_plan",
             "make_excel", "make_docx", "make_pptx", "zip_pack", "unzip_pack",
         },
@@ -262,7 +232,7 @@ STYLE_CONFIGS = {
         "description": "Глубокие расследования (Deep Research), цифровая разведка, проверка контрагентов, инфраструктурный OSINT и верификация данных",
         "tools": COMMON_FILE_TOOLS | {
             "web_search", "fetch_url", "browser_action", "run_python", "run_cmd",
-            "run_background_cmd", "task_status", "task_log",
+            "run_background_cmd", "task_status", "task_log", "kill_background_cmd",
             "funstat_osint", "dadata_osint", "sys_info", "render_plan", "make_docx", "make_excel",
             "zip_pack", "unzip_pack",
         },

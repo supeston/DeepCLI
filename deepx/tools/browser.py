@@ -1,52 +1,36 @@
 import asyncio
-import concurrent.futures
-import ctypes
-import difflib
-from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 import json
 import os
-import py_compile
 import re
-import shutil
-import signal
-import subprocess
-import sys
-import textwrap
-import unicodedata
-from pathlib import Path
-
-import pyperclip
-from prompt_toolkit import PromptSession
-from prompt_toolkit.document import Document
-from prompt_toolkit.completion import Completer, Completion
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style as PTStyle
-
-from rich.align import Align
-from rich.console import Console, Group
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich import box
-
-from deepx.api.deep_api import DeepAPI
-from deepx.tools.dadata_osint import DadataOSINTTool
-from deepx.tools.funstat_osint import FunstatOSINTTool
+from typing import Optional, Tuple
+import urllib.parse
+from urllib.request import url2pathname
 
                                                                                 
                     
                                                                                 
 
-from deepx.core.constants import *
-from deepx.core.config import *
-from deepx.ui.markup import *
-from deepx.ui.terminal import console
-
 class BrowserToolsMixin:
     async def init_browser(self):
+        current_loop = asyncio.get_running_loop()
+        if getattr(self, "_browser_loop", None) is not None and self._browser_loop is not current_loop:
+            self.page = None
+            self.browser_context = None
+            self.browser = None
+            self.playwright = None
+        if getattr(self, "page", None) is not None:
+            try:
+                if self.page.is_closed():
+                    self.page = None
+                    self.browser_context = None
+                    self.browser = None
+                    self.playwright = None
+            except Exception:
+                self.page = None
+                self.browser_context = None
+                self.browser = None
+                self.playwright = None
         if not self.playwright:
             from playwright.async_api import async_playwright
             self.playwright = await async_playwright().start()
@@ -63,6 +47,7 @@ class BrowserToolsMixin:
             await self._enable_browser_stealth()
             self.page = await self.browser_context.new_page()
             self._configure_browser_page(self.page)
+            self._browser_loop = current_loop
 
     async def _enable_browser_stealth(self):
         try:
@@ -89,6 +74,38 @@ class BrowserToolsMixin:
             raise RuntimeError(
                 f"DEEPX остановлен: playwright-stealth не удалось включить: {exc}"
             ) from exc
+
+    async def browser_stealth_report(self) -> dict:
+        await self.init_browser()
+        try:
+            installed_version = package_version("playwright-stealth")
+        except Exception:
+            installed_version = "unknown"
+        signals = await self.page.evaluate(
+            """() => ({
+                webdriver: navigator.webdriver,
+                userAgent: navigator.userAgent,
+                languages: Array.from(navigator.languages || []),
+                plugins: navigator.plugins ? navigator.plugins.length : 0,
+                chromeObject: Boolean(window.chrome),
+            })"""
+        )
+        warnings = []
+        if signals.get("webdriver"):
+            warnings.append("navigator.webdriver is true (bot signal detected)")
+        if "headless" in str(signals.get("userAgent", "")).lower():
+            warnings.append("Headless token present in User-Agent")
+        if not signals.get("plugins"):
+            warnings.append("navigator.plugins list is empty")
+        if not signals.get("chromeObject"):
+            warnings.append("window.chrome object is absent")
+        return {
+            "package_version": installed_version,
+            "status": self.browser_stealth_status,
+            "basic_check": "warn" if warnings else "pass",
+            "signals": signals,
+            "warnings": warnings,
+        }
 
     def _configure_browser_page(self, page):
         page.set_default_timeout(self.browser_timeout)
@@ -209,8 +226,26 @@ class BrowserToolsMixin:
         ]
         return json.dumps(state, ensure_ascii=False, indent=2)
 
+    def _is_protected_url(self, url: str) -> Optional[str]:
+        if not url or not getattr(self, "protect_self", False):
+            return None
+        parsed = urllib.parse.urlparse(str(url).strip())
+        if parsed.scheme.lower() == "file":
+            try:
+                local_path = url2pathname(urllib.parse.unquote(parsed.path))
+            except Exception:
+                return self._deny(url)
+            if self.is_protected(local_path):
+                return self._deny(url)
+        return None
+
+    def _resolve_safe_browser_path(self, raw_path: str) -> Tuple[Optional[str], Optional[str]]:
+        target = os.path.abspath(os.path.join(self.cwd, str(raw_path)))
+        if getattr(self, "protect_self", False) and self.is_protected(target):
+            return None, self._deny(raw_path)
+        return target, None
+
     async def browser_action(self, action: str, args: dict) -> str:
-        await self.init_browser()
         args = args or {}
         raw_action = str(action or args.get("action") or "snapshot").lower().strip().replace("-", "_")
 
@@ -250,6 +285,38 @@ class BrowserToolsMixin:
         }
         action = _ACTION_ALIASES.get(raw_action, raw_action)
 
+        # Pre-flight protect_self checks before launching Chromium
+        if action in ("navigate", "open"):
+            url = str(args.get("url") or args.get("link") or args.get("target") or args.get("path") or "").strip().strip("'\"`")
+            if url:
+                blocked = self._is_protected_url(url)
+                if blocked:
+                    return blocked
+        elif action == "new_tab":
+            tab_url = str(args.get("url") or args.get("link") or "").strip().strip("'\"`")
+            if tab_url:
+                blocked = self._is_protected_url(tab_url)
+                if blocked:
+                    return blocked
+        elif action == "upload":
+            files = args.get("files", args.get("path", args.get("file", [])))
+            if isinstance(files, str):
+                files = [files]
+            for p in files:
+                _, err_msg = self._resolve_safe_browser_path(p)
+                if err_msg:
+                    return err_msg
+        elif action == "download" and args.get("path"):
+            _, err_msg = self._resolve_safe_browser_path(args.get("path"))
+            if err_msg:
+                return err_msg
+        elif action == "screenshot":
+            _, err_msg = self._resolve_safe_browser_path(args.get("path", "browser_screenshot.png"))
+            if err_msg:
+                return err_msg
+
+        await self.init_browser()
+
         try:
             if action in ("snapshot", "observe"):
                 return await self.browser_snapshot(
@@ -261,6 +328,9 @@ class BrowserToolsMixin:
                     raise ValueError("url is required")
                 if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", url):
                     url = "https://" + url
+                blocked = self._is_protected_url(url)
+                if blocked:
+                    return blocked
                 await self.page.goto(url, wait_until="domcontentloaded")
             elif action == "click":
                 loc = await self._browser_locator(args)
@@ -331,11 +401,16 @@ class BrowserToolsMixin:
             elif action == "reload":
                 await self.page.reload(wait_until="domcontentloaded")
             elif action == "new_tab":
-                self.page = await self.browser_context.new_page()
-                self._configure_browser_page(self.page)
                 tab_url = args.get("url") or args.get("link")
                 if tab_url:
-                    await self.page.goto(str(tab_url).strip().strip("'\"`"), wait_until="domcontentloaded")
+                    tab_url = str(tab_url).strip().strip("'\"`")
+                    blocked = self._is_protected_url(tab_url)
+                    if blocked:
+                        return blocked
+                self.page = await self.browser_context.new_page()
+                self._configure_browser_page(self.page)
+                if tab_url:
+                    await self.page.goto(tab_url, wait_until="domcontentloaded")
             elif action == "switch_tab":
                 self.page = self.browser_context.pages[int(args.get("index", -1))]
                 await self.page.bring_to_front()
@@ -353,23 +428,32 @@ class BrowserToolsMixin:
                 files = args.get("files", args.get("path", args.get("file", [])))
                 if isinstance(files, str):
                     files = [files]
-                await (await self._browser_locator(args)).set_input_files([
-                    os.path.abspath(os.path.join(self.cwd, p)) for p in files
-                ])
+                safe_files = []
+                for p in files:
+                    safe_path, err_msg = self._resolve_safe_browser_path(p)
+                    if err_msg:
+                        return err_msg
+                    safe_files.append(safe_path)
+                await (await self._browser_locator(args)).set_input_files(safe_files)
             elif action == "download":
+                requested = args.get("path")
+                if requested:
+                    _, err_msg = self._resolve_safe_browser_path(requested)
+                    if err_msg:
+                        return err_msg
                 async with self.page.expect_download(timeout=30000) as info:
                     await (await self._browser_locator(args)).click()
                 download = await info.value
-                target = os.path.abspath(os.path.join(
-                    self.cwd, args.get("path") or download.suggested_filename
-                ))
+                target, err_msg = self._resolve_safe_browser_path(requested or download.suggested_filename)
+                if err_msg:
+                    return err_msg
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 await download.save_as(target)
                 return f"[Success: Downloaded to {target}]\n" + await self.browser_snapshot()
             elif action == "screenshot":
-                target = os.path.abspath(os.path.join(
-                    self.cwd, args.get("path", "browser_screenshot.png")
-                ))
+                target, err_msg = self._resolve_safe_browser_path(args.get("path", "browser_screenshot.png"))
+                if err_msg:
+                    return err_msg
                 os.makedirs(os.path.dirname(target), exist_ok=True)
                 await self.page.screenshot(path=target, full_page=bool(args.get("full_page", True)))
                 return f"[Success: Screenshot saved to {target}]\n" + await self.browser_snapshot()

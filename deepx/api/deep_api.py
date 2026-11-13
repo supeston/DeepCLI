@@ -33,23 +33,22 @@ def _separate_reasoning(think: str, answer: str) -> tuple[str, str]:
 
 
 def _has_complete_tool_call(text: str) -> bool:
-    """Return True only after a supported tool-call block is closed or complete."""
+    """Return True only after a closed, parseable tool-call block is present."""
     value = str(text or "")
-    if bool(
-        re.search(r"```(?:tool_call|tool_calls|tools|tool|json)?\s*\n?.+?\n?```", value, re.DOTALL)
+    has_closed_marker = bool(
+        re.search(r"```[^\n]*\n[\s\S]+?\n```", value)
         or re.search(r"<(?:tool_call|function_call)>\s*.+?\s*</(?:tool_call|function_call)>", value, re.DOTALL | re.IGNORECASE)
         or re.search(r"<tool_calls>\s*.+?\s*</tool_calls>", value, re.DOTALL | re.IGNORECASE)
         or re.search(r"<invoke\b.+?</invoke\s*>", value, re.DOTALL | re.IGNORECASE)
-    ):
-        return True
+    )
+    if not has_closed_marker:
+        return False
     try:
         from deepx.parser.tool_parser import extract_tool_calls
         calls = extract_tool_calls(value)
-        if calls and any(isinstance(c, dict) and c.get("tool") for c in calls):
-            return True
+        return bool(calls and any(isinstance(c, dict) and c.get("tool") for c in calls))
     except Exception:
-        pass
-    return False
+        return False
 
 
 class DeepAPI:
@@ -342,6 +341,8 @@ class DeepAPI:
 
     async def stop_generation(self, timeout: float = 5.0) -> bool:
         if not self.page or self.page.is_closed():
+            return False
+        if not await self.is_generating():
             return False
 
         selectors = (
@@ -844,9 +845,11 @@ class DeepAPI:
             return {"think": "", "answer": ""}
 
     # ─── IMAGE PATH PATTERN ─────────────────────────────────────────────────
-    # Matches [C:\path\to\image.png] or [/path/to/image.jpg] in prompt text.
+    # Matches [C:\path\to\image.png] or [/path/to/image.jpg] in prompt text (image extensions only).
+    _IMAGE_EXT_PATTERN = r"(?:png|jpe?g|gif|webp|bmp|ico|tiff?|avif|heic|heif)"
     _IMAGE_PATH_RE = re.compile(
-        r"\[([A-Za-z]:[/\\][^\[\]\n]+\.[a-zA-Z]{2,5}|/[^\[\]\n]+\.[a-zA-Z]{2,5})\]"
+        rf"\[([A-Za-z]:[/\\][^\[\]\n]+\.{_IMAGE_EXT_PATTERN}|/[^\[\]\n]+\.{_IMAGE_EXT_PATTERN})\]",
+        re.IGNORECASE,
     )
 
     async def _upload_images(self, image_paths: list[str]) -> bool:
@@ -1002,10 +1005,18 @@ class DeepAPI:
 
 
     async def send_message(self, prompt: str, stream: bool = False):
-        # ── 1. Extract image paths from prompt ──────────────────────────────
-        image_paths = self._IMAGE_PATH_RE.findall(prompt)
-        # Remove image path tags from the text sent to the chat
-        text_prompt = self._IMAGE_PATH_RE.sub("", prompt).strip()
+        # ── 1. Extract existing image paths from prompt ─────────────────────
+        raw_image_paths = self._IMAGE_PATH_RE.findall(prompt)
+        image_paths = [p.strip() for p in raw_image_paths if os.path.isfile(p.strip())]
+        # Remove only genuinely attached image path tags from the text sent to chat
+        if image_paths:
+            image_set = set(image_paths)
+            text_prompt = self._IMAGE_PATH_RE.sub(
+                lambda m: "" if m.group(1).strip() in image_set else m.group(0),
+                prompt,
+            ).strip()
+        else:
+            text_prompt = prompt.strip()
         # If after removing image refs the text is empty, use a placeholder
         if image_paths and not text_prompt:
             text_prompt = "."

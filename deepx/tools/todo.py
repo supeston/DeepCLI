@@ -42,6 +42,8 @@ from deepx.tools.funstat_osint import FunstatOSINTTool
 
 from deepx.core.constants import *
 from deepx.core.config import *
+from rich.markup import escape as rich_escape
+
 from deepx.parser.tool_parser import _as_int
 from deepx.ui.markup import *
 from deepx.ui.terminal import console
@@ -57,10 +59,10 @@ class TodoToolsMixin:
         "canceled": "cancelled",
     }
     TODO_SYMBOLS = {
-        "pending": ("○", "dim #94A3B8"),
-        "active": ("●", "bold #FDE68A"),
-        "done": ("✔", "bold #22C55E"),
-        "cancelled": ("✖", "dim strike #EF4444"),
+        "pending": ("[ ]", "dim #94A3B8"),
+        "active": ("[>]", "bold #FDE68A"),
+        "done": ("[x]", "bold #22C55E"),
+        "cancelled": ("[-]", "dim strike #EF4444"),
     }
 
     def _normalize_todo_status(self, status: str) -> str:
@@ -116,16 +118,18 @@ class TodoToolsMixin:
         lines = []
         for index, item in enumerate(self.todos, 1):
             symbol, color = self.TODO_SYMBOLS[item["status"]]
+            safe_symbol = rich_escape(symbol)
+            safe_text = rich_escape(str(item["text"]))
             number = f"[dim #475569]{index:>2}[/dim #475569]"
             if item["status"] == "done":
-                text = f"[dim strike #94A3B8]{item['text']}[/dim strike #94A3B8]"
+                text = f"[dim strike #94A3B8]{safe_text}[/dim strike #94A3B8]"
             elif item["status"] == "active":
-                text = f"[bold #FDE68A]{item['text']}[/bold #FDE68A]"
+                text = f"[bold #FDE68A]{safe_text}[/bold #FDE68A]"
             elif item["status"] == "cancelled":
-                text = f"[dim strike #7F1D1D]{item['text']}[/dim strike #7F1D1D]"
+                text = f"[dim strike #7F1D1D]{safe_text}[/dim strike #7F1D1D]"
             else:
-                text = f"[#CBD5E1]{item['text']}[/#CBD5E1]"
-            lines.append(f"{number}  [{color}]{symbol}[/{color}]  {text}")
+                text = f"[#CBD5E1]{safe_text}[/#CBD5E1]"
+            lines.append(f"{number}  [{color}]{safe_symbol}[/{color}]  {text}")
 
         filled = int(round(percent / 5))
         bar = f"[#536DFE]{'━' * filled}[/#536DFE][#1E293B]{'━' * (20 - filled)}[/#1E293B]"

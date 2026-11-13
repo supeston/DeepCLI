@@ -3,19 +3,25 @@
 **/.env
 *.env
 **/*.env
-!.env.example
+!/.env.example
 
 # Authentication & State
 state.json
 **/state.json
 *.state.json
 **/*.state.json
+vds_profiles.json
+**/vds_profiles.json
 .deepx/
 **/.deepx/
+.deepx_history/
+**/.deepx_history/
 .deepx_browser_state.json
 **/.deepx_browser_state.json
 .deepx_project_memory.json
 **/.deepx_project_memory.json
+.pytest_cache/
+**/.pytest_cache/
 
 # Generated Data & Downloads
 dadata_logos/
