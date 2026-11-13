@@ -433,7 +433,7 @@ export const TerminalSimulator: React.FC = () => {
                   {ASCII_BANNER}
                 </pre>
                 <div className="mt-2.5 text-[10px] text-slate-400 font-medium">
-                  <span className="text-slate-200">v3.0.0</span>
+                  <span className="text-slate-200">v3.1.0</span>
                   <span className="mx-2 text-slate-600">·</span>
                   <span className="text-[#536DFE] font-semibold">DeepSeek-V4.1-Flash</span>
                   <span className="ml-1.5 text-slate-500">(284B / 13B)</span>

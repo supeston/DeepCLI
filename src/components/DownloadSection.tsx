@@ -7,16 +7,16 @@ export const DownloadSection: React.FC = () => {
 
   const steps = [
     {
-      title: '1. Clone Repository',
-      code: 'git clone https://github.com/supeston/DeepCLI.git\ncd DeepCLI',
+      title: '1. Quick System Install (PowerShell)',
+      code: 'irm https://raw.githubusercontent.com/supeston/DeepCLI/main/install.ps1 | iex',
     },
     {
-      title: '2. Launch & Auto-Setup (Windows)',
-      code: 'start.bat\n# Or cscript run_cli.vbs for Windows Terminal (110x30)',
+      title: '2. Global Command & Visual Launcher Hub',
+      code: 'deepx\n# Or open run_cli.vbs for Interactive Control Hub (Windows Terminal)',
     },
     {
-      title: '3. Manual Setup & Self-Update',
-      code: 'python deepx/install.py\npython deepx/deep_cli.py --update',
+      title: '3. Diagnostics & Updates',
+      code: 'deepx --update\ndeepx --launcher',
     },
   ];
 

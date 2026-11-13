@@ -15,7 +15,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
   const [typingDone, setTypingDone] = useState(isTest);
   const [copied, setCopied] = useState(false);
 
-  const installCmd = 'git clone https://github.com/supeston/DeepCLI.git && cd DeepCLI && cscript run_cli.vbs';
+  const installCmd = 'irm https://raw.githubusercontent.com/supeston/DeepCLI/main/install.ps1 | iex';
 
   useEffect(() => {
     if (isTest) {
@@ -71,7 +71,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
             />
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200">
               <span className="w-1.5 h-1.5 rounded-full bg-[#536DFE]" />
-              v3.0.0 · AST Repo Map · Auto-Update
+              v3.1.0 · Interactive Launcher · Windows Terminal
             </span>
           </div>
 

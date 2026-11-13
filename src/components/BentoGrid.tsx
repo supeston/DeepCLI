@@ -19,7 +19,7 @@ export const BentoGrid: React.FC = () => {
       title: 'Terminal-first Interactive Agent',
       desc: 'Runs natively in Windows ConPTY with an in-place single-line status bar, framed Rich UI, and zero JSON clutter. Observes real test/build streams, reads only bounded file slices, and backs up edits to .deepx_history for instant /undo rollback.',
       metrics: [
-        { label: 'Version', val: 'v3.0.0' },
+        { label: 'Version', val: 'v3.1.0' },
         { label: 'Integration', val: 'ConPTY' },
       ],
     },

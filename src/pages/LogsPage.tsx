@@ -4,6 +4,15 @@ import { ScrollReveal } from '../components/ScrollReveal';
 export const LogsPage: React.FC = () => {
   const logs = [
     {
+      version: 'v3.1.0',
+      date: 'Nov 13, 2026',
+      changes: [
+        'Replaced legacy start.bat with run_cli.vbs launching the Rich Interactive Control Hub (deepx/launcher.py) with arrow-key navigation, update check, dependency diagnostics, and global command toggle.',
+        'Added one-command PowerShell system installer (install.ps1) and global deepx PATH command with automatic classic-console to Windows Terminal handoff and clean window closure.',
+        'Hardened both Windows Terminal (24-bit TrueColor) and classic conhost.exe: disabled QuickEdit freeze, fixed Win32 console close handler with child-process cleanup, moved input prompts to daemon threads, and bounded Playwright shutdown timeouts.'
+      ]
+    },
+    {
       version: 'v3.0.0',
       date: 'Nov 13, 2026',
       changes: [
