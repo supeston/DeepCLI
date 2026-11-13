@@ -4,31 +4,71 @@ Dim shell, fso, procEnv
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
+Function Q(text)
+    Q = Chr(34) & text & Chr(34)
+End Function
+
+Function ResolveAppDir()
+    Dim scriptDir, parentDir, desktopDir, localAppData
+    scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+    If fso.FileExists(scriptDir & "\deepx\launcher.py") Then
+        ResolveAppDir = scriptDir
+        Exit Function
+    End If
+
+    parentDir = fso.GetParentFolderName(scriptDir)
+    If parentDir <> "" And fso.FileExists(parentDir & "\deepx\launcher.py") Then
+        ResolveAppDir = parentDir
+        Exit Function
+    End If
+
+    desktopDir = shell.SpecialFolders("Desktop")
+    If fso.FileExists(desktopDir & "\DEEPX CLI (DEEPSEEK)\deepx\launcher.py") Then
+        ResolveAppDir = desktopDir & "\DEEPX CLI (DEEPSEEK)"
+        Exit Function
+    End If
+    If fso.FileExists(desktopDir & "\DEEPX\deepx\launcher.py") Then
+        ResolveAppDir = desktopDir & "\DEEPX"
+        Exit Function
+    End If
+
+    localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
+    If fso.FileExists(localAppData & "\DeepX\app\deepx\launcher.py") Then
+        ResolveAppDir = localAppData & "\DeepX\app"
+        Exit Function
+    End If
+
+    ' Bootstrap download if launched from standalone VBS without local repo
+    Dim targetDir, zipFile, repoUrl
+    targetDir = desktopDir & "\DEEPX"
+    If Not fso.FolderExists(targetDir) Then
+        fso.CreateFolder targetDir
+    End If
+    zipFile = shell.ExpandEnvironmentStrings("%TEMP%") & "\DeepCLI_main.zip"
+    repoUrl = "https://github.com/supeston/DeepCLI/archive/refs/heads/main.zip"
+    shell.Run "curl.exe -fSL -o " & Q(zipFile) & " " & Q(repoUrl), 0, True
+    If fso.FileExists(zipFile) Then
+        shell.Run "tar.exe -xf " & Q(zipFile) & " -C " & Q(targetDir) & " --strip-components=1", 0, True
+        On Error Resume Next
+        fso.DeleteFile zipFile, True
+        On Error GoTo 0
+    End If
+    ResolveAppDir = targetDir
+End Function
+
 Dim appDir
-appDir = fso.GetParentFolderName(WScript.ScriptFullName)
+appDir = ResolveAppDir()
+If Not fso.FolderExists(appDir) Then
+    MsgBox "DEEPX directory could not be found or initialized: " & appDir, vbCritical, "DEEPX LAUNCHER"
+    WScript.Quit 1
+End If
+
 shell.CurrentDirectory = appDir
 
 Set procEnv = shell.Environment("PROCESS")
 procEnv("PYTHONUTF8") = "1"
 procEnv("PYTHONDONTWRITEBYTECODE") = "1"
 procEnv("PYTHONPATH") = appDir
-
-Function Q(text)
-    Q = Chr(34) & text & Chr(34)
-End Function
-
-Function IsWindows11()
-    On Error Resume Next
-    Dim buildStr
-    buildStr = shell.RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber")
-    If Err.Number = 0 And IsNumeric(buildStr) Then
-        IsWindows11 = (CLng(buildStr) >= 22000)
-    Else
-        IsWindows11 = False
-    End If
-    Err.Clear
-    On Error GoTo 0
-End Function
 
 Function CheckPythonPrefix(prefix)
     On Error Resume Next
@@ -43,11 +83,15 @@ Function CheckPythonPrefix(prefix)
     On Error GoTo 0
 End Function
 
+Dim hasVenv
+hasVenv = False
+
 Function FindOrInstallPythonPrefix()
     Dim localAppData, venvPy
     localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
     venvPy = appDir & "\.venv\Scripts\python.exe"
     If fso.FileExists(venvPy) Then
+        hasVenv = True
         FindOrInstallPythonPrefix = Q(venvPy)
         Exit Function
     End If
@@ -80,7 +124,6 @@ Function FindOrInstallPythonPrefix()
         End If
     Next
 
-    ' Install Python 3.11.9 silently if absent
     Dim tempDir, pyInstaller, dlCmd, instRc, installedPy
     tempDir = shell.ExpandEnvironmentStrings("%TEMP%")
     pyInstaller = tempDir & "\deepx_python_3119.exe"
@@ -102,26 +145,6 @@ Function FindOrInstallPythonPrefix()
     FindOrInstallPythonPrefix = ""
 End Function
 
-Function FindWindowsTerminalPath()
-    Dim localAppData, wtAlias, rc
-    localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
-    wtAlias = localAppData & "\Microsoft\WindowsApps\wt.exe"
-    If fso.FileExists(wtAlias) Then
-        FindWindowsTerminalPath = wtAlias
-        Exit Function
-    End If
-
-    On Error Resume Next
-    rc = shell.Run("where /q wt.exe", 0, True)
-    If Err.Number = 0 And rc = 0 Then
-        FindWindowsTerminalPath = "wt.exe"
-    Else
-        FindWindowsTerminalPath = ""
-    End If
-    Err.Clear
-    On Error GoTo 0
-End Function
-
 Dim pyPrefix, launcherScript
 pyPrefix = FindOrInstallPythonPrefix()
 If pyPrefix = "" Then
@@ -130,36 +153,21 @@ If pyPrefix = "" Then
 End If
 
 launcherScript = appDir & "\deepx\launcher.py"
-Dim win11, wtPath, wtLaunchCmd, classicCmd
-win11 = IsWindows11()
-wtPath = FindWindowsTerminalPath()
-
-' Force launch inside Windows Terminal on Windows 11 or whenever WT is installed
-If win11 Or wtPath <> "" Then
-    Dim targetWt
-    If wtPath <> "" Then
-        targetWt = wtPath
-    Else
-        targetWt = "wt.exe"
-    End If
-
-    wtLaunchCmd = Q(targetWt) & " -w new --size 116,34 new-tab --title ""DEEPX LAUNCHER"" -d " & Q(appDir) & " " & pyPrefix & " -u " & Q(launcherScript) & " --in-wt"
-    On Error Resume Next
-    shell.Run wtLaunchCmd, 1, False
-    If Err.Number = 0 Then
-        WScript.Quit 0
-    End If
-    Err.Clear
-    If win11 And targetWt <> "wt.exe" Then
-        shell.Run "wt.exe -w new --size 116,34 new-tab --title ""DEEPX LAUNCHER"" -d " & Q(appDir) & " " & pyPrefix & " -u " & Q(launcherScript) & " --in-wt", 1, False
-        If Err.Number = 0 Then
-            WScript.Quit 0
-        End If
-        Err.Clear
-    End If
-    On Error GoTo 0
+If Not fso.FileExists(launcherScript) Then
+    MsgBox "Launcher script not found at: " & launcherScript, vbCritical, "DEEPX LAUNCHER"
+    WScript.Quit 1
 End If
 
-' Fallback to classic Windows Console ONLY when not Windows 11 and WT is absent/unavailable
-classicCmd = pyPrefix & " -u " & Q(launcherScript) & " --no-relaunch"
-shell.Run classicCmd, 1, False
+On Error Resume Next
+If hasVenv Then
+    ' Hidden bootstrap verifies/cleans zombie WindowsTerminal, spawns visible WT or classic console, and brings window to front
+    shell.Run pyPrefix & " -u " & Q(launcherScript) & " --bootstrap", 0, False
+    If Err.Number <> 0 Then
+        Err.Clear
+        shell.Run pyPrefix & " -u " & Q(launcherScript) & " --no-relaunch", 1, False
+    End If
+Else
+    ' First-time setup: open visible window immediately so user sees installation progress
+    shell.Run pyPrefix & " -u " & Q(launcherScript), 1, False
+End If
+On Error GoTo 0

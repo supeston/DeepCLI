@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,7 @@ _IDE_OR_CONPTY_ENV_VARS = (
 _SKIP_RELAUNCH_FLAGS = {
     "--in-wt",
     "--no-relaunch",
+    "--bootstrap",
     "--version",
     "-V",
     "--update",
@@ -183,6 +185,89 @@ def close_classic_console_window() -> bool:
     return False
 
 
+def get_visible_wt_windows_on_current_desktop() -> list[int]:
+    """Return HWNDs of visible Windows Terminal windows on the calling thread's desktop."""
+    if sys.platform != "win32":
+        return []
+    found: list[int] = []
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        hdesk = user32.GetThreadDesktop(kernel32.GetCurrentThreadId())
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+
+        def _cb(hwnd, _lparam):
+            if hwnd and user32.IsWindowVisible(hwnd):
+                cls_buf = ctypes.create_unicode_buffer(128)
+                if user32.GetClassNameW(hwnd, cls_buf, 128) > 0:
+                    if cls_buf.value == "CASCADIA_HOSTING_WINDOW_CLASS":
+                        found.append(int(hwnd))
+            return 1
+
+        enum_fn = WNDENUMPROC(_cb)
+        if hdesk:
+            user32.EnumDesktopWindows(hdesk, enum_fn, 0)
+        else:
+            user32.EnumWindows(enum_fn, 0)
+    except Exception:
+        pass
+    return found
+
+
+def cleanup_headless_wt_processes() -> int:
+    """Terminate zombie/other-desktop WindowsTerminal.exe processes when none are visible on current desktop."""
+    if sys.platform != "win32" or "pytest" in sys.modules:
+        return 0
+    if get_visible_wt_windows_on_current_desktop():
+        return 0
+    try:
+        kernel32 = ctypes.windll.kernel32
+
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", ctypes.c_uint32),
+                ("cntUsage", ctypes.c_uint32),
+                ("th32ProcessID", ctypes.c_uint32),
+                ("th32DefaultHeapID", ctypes.c_size_t),
+                ("th32ModuleID", ctypes.c_uint32),
+                ("cntThreads", ctypes.c_uint32),
+                ("th32ParentProcessID", ctypes.c_uint32),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", ctypes.c_uint32),
+                ("szExeFile", ctypes.c_wchar * 260),
+            ]
+
+        snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+        if snapshot in (-1, 0):
+            return 0
+        wt_pids: list[int] = []
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+            ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while ok:
+                if entry.szExeFile.lower() == "windowsterminal.exe":
+                    wt_pids.append(int(entry.th32ProcessID))
+                ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            kernel32.CloseHandle(snapshot)
+
+        killed = 0
+        for pid in wt_pids:
+            handle = kernel32.OpenProcess(0x0001, False, pid)
+            if handle:
+                try:
+                    if kernel32.TerminateProcess(handle, 1):
+                        killed += 1
+                finally:
+                    kernel32.CloseHandle(handle)
+        if killed:
+            time.sleep(0.15)
+        return killed
+    except Exception:
+        return 0
+
+
 def relaunch_in_windows_terminal(
     launch_args: list[str],
     cwd: str,
@@ -200,6 +285,8 @@ def relaunch_in_windows_terminal(
             target_wt = "wt.exe"
         else:
             return False
+
+    cleanup_headless_wt_processes()
 
     target_cwd = str(cwd or os.getcwd())
     if not os.path.isdir(target_cwd):
@@ -227,6 +314,48 @@ def relaunch_in_windows_terminal(
     if close_parent:
         close_classic_console_window()
     return True
+
+
+def bootstrap_launcher_window(project_root: Optional[Path] = None) -> bool:
+    """Launch DEEPX Launcher in a visible Windows Terminal window, falling back to a new console window."""
+    root = Path(project_root).resolve() if project_root else get_project_root()
+    py_exec = _resolve_launcher_python(root)
+    launcher_script = root / "deepx" / "launcher.py"
+
+    if sys.platform == "win32" and (find_windows_terminal() is not None or is_windows_11()):
+        before_hwnds = set(get_visible_wt_windows_on_current_desktop())
+        ok = relaunch_in_windows_terminal(
+            launch_args=[str(py_exec), "-u", str(launcher_script), "--in-wt"],
+            cwd=str(root),
+            title="DEEPX LAUNCHER",
+            close_parent=False,
+        )
+        if ok:
+            deadline = time.monotonic() + 2.2
+            while time.monotonic() < deadline:
+                current_hwnds = get_visible_wt_windows_on_current_desktop()
+                if current_hwnds:
+                    new_hwnds = [h for h in current_hwnds if h not in before_hwnds]
+                    target_hwnd = new_hwnds[0] if new_hwnds else current_hwnds[0]
+                    try:
+                        ctypes.windll.user32.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+                        ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                    except Exception:
+                        pass
+                    return True
+                time.sleep(0.1)
+
+    new_console_flag = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    try:
+        subprocess.Popen(
+            [str(py_exec), "-u", str(launcher_script), "--no-relaunch"],
+            cwd=str(root),
+            creationflags=new_console_flag,
+            close_fds=True,
+        )
+        return True
+    except OSError:
+        return False
 
 
 def _resolve_launcher_python(project_root: Path) -> Path:

@@ -1,11 +1,8 @@
-[CmdletBinding()]
-param(
-    [string]$InstallDir = "",
-    [switch]$Launch
-)
-
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+$InstallDir = if ($env:DEEPX_HOME) { $env:DEEPX_HOME } else { "" }
+$Launch = ($env:DEEPX_AUTO_LAUNCH -eq "1")
 
 $RepoUrl = "https://github.com/supeston/DeepCLI.git"
 $ArchiveUrl = "https://github.com/supeston/DeepCLI/archive/refs/heads/main.zip"

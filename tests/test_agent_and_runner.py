@@ -790,3 +790,49 @@ def test_deep_api_close_bounded_timeout_and_terminal_helpers(monkeypatch):
     # Smoke-check Win32 input & child cleanup helpers never raise
     disable_quick_edit_mode()
     assert shutdown_child_processes(root_pid=99999999) == 0
+
+
+def test_bootstrap_launcher_window_wt_and_fallback(monkeypatch, tmp_path):
+    from deepx.core import windows_launch as wl
+
+    app_root = tmp_path / "DeepX App"
+    venv_bin = app_root / ".venv" / ("Scripts" if sys.platform == "win32" else "bin")
+    venv_bin.mkdir(parents=True)
+    py_name = "python.exe" if sys.platform == "win32" else "python"
+    (venv_bin / py_name).write_text("", encoding="utf-8")
+    (app_root / "deepx").mkdir(parents=True)
+    (app_root / "deepx" / "launcher.py").write_text("# stub\n", encoding="utf-8")
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(wl, "cleanup_headless_wt_processes", lambda: 0)
+    monkeypatch.setattr(wl, "find_windows_terminal", lambda: r"C:\Apps\wt.exe")
+
+    spawned_calls = []
+
+    def fake_popen(cmd, **kwargs):
+        spawned_calls.append((cmd, kwargs))
+        return SimpleNamespace(pid=9001)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+
+    # Case 1: WT opens a new visible window on the current desktop
+    vis_seq = iter([[101], [101, 202]])
+    monkeypatch.setattr(wl, "get_visible_wt_windows_on_current_desktop", lambda: next(vis_seq, [101, 202]))
+    assert wl.bootstrap_launcher_window(project_root=app_root) is True
+    assert len(spawned_calls) == 1
+    assert spawned_calls[0][0][0] == r"C:\Apps\wt.exe"
+    assert "--in-wt" in spawned_calls[0][0]
+
+    # Case 2: WT spawns on a hidden/blocked desktop (no new visible window) -> falls back to CREATE_NEW_CONSOLE
+    spawned_calls.clear()
+    monkeypatch.setattr(wl, "get_visible_wt_windows_on_current_desktop", lambda: [])
+    monkeypatch.setattr(wl.time, "sleep", lambda _s: None)
+    clock = iter([0.0, 0.5, 1.5, 2.5])
+    monkeypatch.setattr(wl.time, "monotonic", lambda: next(clock, 3.0))
+
+    assert wl.bootstrap_launcher_window(project_root=app_root) is True
+    assert len(spawned_calls) == 2
+    fallback_cmd, fallback_kw = spawned_calls[1]
+    assert "--no-relaunch" in fallback_cmd
+    assert fallback_kw.get("creationflags", 0) == getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+

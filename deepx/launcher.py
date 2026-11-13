@@ -13,14 +13,23 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 
 def _ensure_bootstrapped_environment(project_root: Path) -> None:
-    """Ensure .venv and Rich exist before importing TUI dependencies."""
+    """Ensure .venv and core TUI dependencies exist before importing third-party modules."""
+    venv_dir = project_root / ".venv"
     venv_py = (
-        project_root
-        / ".venv"
+        venv_dir
         / ("Scripts" if sys.platform == "win32" else "bin")
         / ("python.exe" if sys.platform == "win32" else "python")
     )
-    in_venv = os.path.normcase(os.path.realpath(sys.executable)) == os.path.normcase(
+
+    if "--bootstrap" in sys.argv[1:] and venv_py.is_file() and "pytest" not in sys.modules:
+        from deepx.core.windows_launch import bootstrap_launcher_window
+
+        ok = bootstrap_launcher_window(project_root)
+        sys.exit(0 if ok else 1)
+
+    in_venv = os.path.normcase(os.path.abspath(sys.prefix)) == os.path.normcase(
+        os.path.abspath(str(venv_dir))
+    ) or os.path.normcase(os.path.realpath(sys.executable)) == os.path.normcase(
         os.path.realpath(str(venv_py))
     )
 
@@ -28,16 +37,27 @@ def _ensure_bootstrapped_environment(project_root: Path) -> None:
         res = subprocess.run([str(venv_py), "-u", str(__file__), *sys.argv[1:]], check=False)
         sys.exit(res.returncode)
 
-    try:
-        import rich  # noqa: F401
+    missing_core = False
+    for mod_name in ("rich", "httpx", "prompt_toolkit", "pyperclip"):
+        try:
+            __import__(mod_name)
+        except ImportError:
+            missing_core = True
+            break
+
+    if not missing_core:
         return
-    except ImportError:
-        pass
 
     print("DEEPX Launcher: initializing environment via deepx/install.py...")
     res = subprocess.run([sys.executable, str(project_root / "deepx" / "install.py")], check=False)
     if res.returncode != 0:
         sys.exit(res.returncode)
+
+    if "--bootstrap" in sys.argv[1:] and venv_py.is_file() and "pytest" not in sys.modules:
+        from deepx.core.windows_launch import bootstrap_launcher_window
+
+        ok = bootstrap_launcher_window(project_root)
+        sys.exit(0 if ok else 1)
 
     if venv_py.is_file() and not in_venv and "pytest" not in sys.modules:
         res2 = subprocess.run([str(venv_py), "-u", str(__file__), *sys.argv[1:]], check=False)
@@ -264,8 +284,99 @@ def build_launcher_renderable(
 
 
 def _read_menu_key() -> str:
-    """Read navigation keypress cross-platform, handling Win32 extended arrow codes cleanly."""
+    """Read navigation keypress cross-platform, handling both ConPTY/Win32 VK codes and VT sequences."""
     if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        h_in = kernel32.GetStdHandle(-10)
+
+        class _KEY_EVENT_RECORD(ctypes.Structure):
+            _fields_ = [
+                ("bKeyDown", ctypes.c_int32),
+                ("wRepeatCount", ctypes.c_uint16),
+                ("wVirtualKeyCode", ctypes.c_uint16),
+                ("wVirtualScanCode", ctypes.c_uint16),
+                ("uChar", ctypes.c_wchar),
+                ("dwControlKeyState", ctypes.c_uint32),
+            ]
+
+        class _EVENT_UNION(ctypes.Union):
+            _fields_ = [
+                ("KeyEvent", _KEY_EVENT_RECORD),
+                ("Padding", ctypes.c_byte * 16),
+            ]
+
+        class _INPUT_RECORD(ctypes.Structure):
+            _fields_ = [
+                ("EventType", ctypes.c_uint16),
+                ("Reserved", ctypes.c_uint16),
+                ("Event", _EVENT_UNION),
+            ]
+
+        mode = ctypes.c_ulong()
+        if h_in not in (-1, 0) and kernel32.GetConsoleMode(h_in, ctypes.byref(mode)):
+            # Clear ENABLE_VIRTUAL_TERMINAL_INPUT (0x0200) so ConPTY/WT always translates arrow keys to VK_UP/VK_DOWN
+            if mode.value & 0x0200:
+                kernel32.SetConsoleMode(h_in, mode.value & ~0x0200)
+
+            def _next_key_down() -> tuple[int, str, int]:
+                rec = _INPUT_RECORD()
+                read_cnt = ctypes.c_uint32(0)
+                while True:
+                    if not kernel32.ReadConsoleInputW(h_in, ctypes.byref(rec), 1, ctypes.byref(read_cnt)):
+                        return (0, "", 0)
+                    if read_cnt.value == 1 and rec.EventType == 0x0001 and rec.Event.KeyEvent.bKeyDown:
+                        ke = rec.Event.KeyEvent
+                        return (int(ke.wVirtualKeyCode), ke.uChar or "", int(ke.dwControlKeyState))
+
+            def _has_pending_key() -> bool:
+                pending = ctypes.c_uint32(0)
+                if not kernel32.GetNumberOfConsoleInputEvents(h_in, ctypes.byref(pending)):
+                    return False
+                return pending.value > 0
+
+            while True:
+                vk, ch, ctrl = _next_key_down()
+                if vk == 0 and not ch:
+                    break
+                if (ctrl & (0x0008 | 0x0004)) and (vk == 0x43 or ch == "\x03"):
+                    return "CTRL_C"
+                if vk in (0x26, 0x21):  # VK_UP, VK_PRIOR
+                    return "UP"
+                if vk in (0x28, 0x22):  # VK_DOWN, VK_NEXT
+                    return "DOWN"
+                if vk == 0x25:  # VK_LEFT
+                    return "LEFT"
+                if vk == 0x27:  # VK_RIGHT
+                    return "RIGHT"
+                if vk == 0x0D or ch in ("\r", "\n"):
+                    return "ENTER"
+                if ch == "\x03":
+                    return "CTRL_C"
+                if vk == 0x1B or ch == "\x1b":
+                    if _has_pending_key():
+                        _vk2, ch2, _ = _next_key_down()
+                        if ch2 in ("[", "O") and _has_pending_key():
+                            _vk3, ch3, _ = _next_key_down()
+                            return {
+                                "A": "UP",
+                                "B": "DOWN",
+                                "C": "RIGHT",
+                                "D": "LEFT",
+                            }.get(ch3, "")
+                    return "ESC"
+                low = ch.lower()
+                if low in ("w", "k"):
+                    return "UP"
+                if low in ("s", "j"):
+                    return "DOWN"
+                if low == "q":
+                    return "ESC"
+                if low in ("1", "2", "3", "4", "5"):
+                    return f"NUM_{low}"
+                return ""
+
         import msvcrt
 
         while True:
@@ -285,9 +396,9 @@ def _read_menu_key() -> str:
             if ch == "\x03":
                 return "CTRL_C"
             low = ch.lower()
-            if low == "w":
+            if low in ("w", "k"):
                 return "UP"
-            if low == "s":
+            if low in ("s", "j"):
                 return "DOWN"
             if low == "q":
                 return "ESC"
@@ -428,13 +539,21 @@ def run_launcher(project_root: Optional[Path] = None) -> int:
 
     snapshot = collect_launcher_snapshot(root, use_cached_update=True)
     selected = 0
+    need_full_clear = True
 
     try:
         while True:
             snapshot.cmd_installed = is_system_command_installed(root)
             disable_quick_edit_mode()
-            console.clear()
+            if need_full_clear:
+                console.clear()
+                need_full_clear = False
+            else:
+                sys.stdout.write("\x1b[H")
+                sys.stdout.flush()
             console.print(build_launcher_renderable(snapshot, selected_index=selected))
+            sys.stdout.write("\x1b[J")
+            sys.stdout.flush()
 
             key = _read_menu_key()
             items = get_menu_items(snapshot)
@@ -457,6 +576,7 @@ def run_launcher(project_root: Optional[Path] = None) -> int:
                 continue
 
             action_id = items[selected][0]
+            need_full_clear = True
             if action_id == "launch":
                 return _action_launch_agent(snapshot)
             if action_id == "update":
@@ -476,7 +596,13 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="DEEPX AGENT Launcher & Control Hub")
     parser.add_argument("--in-wt", action="store_true", help="Already inside Windows Terminal")
     parser.add_argument("--no-relaunch", action="store_true", help="Stay in current console")
+    parser.add_argument("--bootstrap", action="store_true", help="Spawn visible WT/console launcher window and exit")
     args = parser.parse_args(argv)
+
+    if args.bootstrap:
+        from deepx.core.windows_launch import bootstrap_launcher_window
+
+        return 0 if bootstrap_launcher_window(_PROJECT_ROOT) else 1
 
     if not args.in_wt and not args.no_relaunch and should_relaunch_in_windows_terminal(argv):
         launched = relaunch_in_windows_terminal(
@@ -492,4 +618,16 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        try:
+            input(f"\nLauncher error ({exc}). Press Enter to close...")
+        except Exception:
+            pass
+        sys.exit(1)
