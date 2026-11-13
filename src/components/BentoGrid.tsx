@@ -17,26 +17,26 @@ export const BentoGrid: React.FC = () => {
   const content: Record<FeatureTab, { title: string; desc: string; metrics: { label: string; val: string }[] }> = {
     cli: {
       title: 'Terminal-first Interactive Agent',
-      desc: 'Execute directly in your Windows console. DeepX utilizes ConPTY to run real build commands, tests, and scripts natively without emulators. It observes the output stream in real-time, handling errors before you even see them.',
+      desc: 'Runs natively in Windows ConPTY with an in-place single-line status bar, framed Rich UI, and zero JSON clutter. Observes real test/build streams, reads only bounded file slices, and backs up edits to .deepx_history for instant /undo rollback.',
       metrics: [
-        { label: 'Latency', val: '< 10ms' },
+        { label: 'Version', val: 'v3.0.0' },
         { label: 'Integration', val: 'ConPTY' },
       ],
     },
     reasoning: {
       title: 'Zero-Telemetry Dual-Engine',
-      desc: 'Separates planning from execution. The primary engine orchestrates workflows and manages state, while a secondary ultra-fast inference engine handles syntax generation and validation. 100% local tracking with zero cloud telemetry.',
+      desc: 'Switches cleanly between instant, think, and read-only plan modes while preserving chat context. Builds a compact AST Repo Map plus DEEPX.md rules from turn zero, checks GitHub releases safely on launch, and sends zero cloud telemetry.',
       metrics: [
-        { label: 'Architecture', val: 'Agentic' },
+        { label: 'Modes', val: 'Fast / Think / Plan' },
         { label: 'Telemetry', val: '0%' },
       ],
     },
     workflows: {
       title: 'End-to-End Task Automation',
-      desc: 'Delegate complex refactoring, bug hunting, or scaffolding. DeepX reads your workspace, formulates an execution plan, spawns necessary terminal processes, validates the result, and commits via Git automatically.',
+      desc: 'Parallel read-only execution (read_file, grep_search, list_dir), live /compact history folding, autonomous Playwright Chromium browsing, and /update self-sync without overwriting local .env or state.json.',
       metrics: [
-        { label: 'Context', val: 'Infinite' },
-        { label: 'Validation', val: 'Auto' },
+        { label: 'Rollbacks', val: '/undo' },
+        { label: 'Updater', val: '/update' },
       ],
     },
     clipboard: {

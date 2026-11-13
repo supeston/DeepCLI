@@ -4,6 +4,17 @@ import { ScrollReveal } from '../components/ScrollReveal';
 export const LogsPage: React.FC = () => {
   const logs = [
     {
+      version: 'v3.0.0',
+      date: 'Nov 13, 2026',
+      changes: [
+        'Restored framed Rich ASCII banner (#536DFE) with narrow-terminal fallback, workspace path indicator, and unified /help, /status, /menu, and prompt palette.',
+        'Added GitHub version checking with in-banner "update to X.Y.Z" notice plus safe /update command and --update CLI flag preserving .env, state.json, .venv, and .deepx data.',
+        'Introduced zero-turn AST Repo Map indexing, DEEPX.md / AGENTS.md instruction loading, /mode plan read-only planning, /undo file checkpoints, /compact folding, and grep_search.',
+        'Replaced raw tool JSON and console dumps with in-place single-line progress status, clean Markdown streaming, hardened tool parser, and Windows ConPTY Ctrl+X / Ctrl+C stability fixes.',
+        'Rewrote README and quick-start documentation without emojis and fixed launchers and installers for project paths containing spaces.'
+      ]
+    },
+    {
       version: 'v2.6.0',
       date: 'Aug 20, 2026',
       changes: [

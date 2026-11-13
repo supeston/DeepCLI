@@ -157,7 +157,7 @@ export const TerminalSimulator: React.FC = () => {
             { id: 4, status: 'pending', text: 'Создание Git коммита с фиксом' },
           ],
         },
-        { type: 'output', content: '👁 Vision Engine: обнаружена ошибка NullReferenceException в UserService.cs:92 (свойство profile.Settings равно null)', duration: 2500 },
+        { type: 'output', content: '[Vision] Обнаружена ошибка NullReferenceException в UserService.cs:92 (свойство profile.Settings равно null)', duration: 2500 },
         {
           type: 'tasks',
           percent: 50,
@@ -428,29 +428,39 @@ export const TerminalSimulator: React.FC = () => {
               className="h-[480px] sm:h-[560px] overflow-y-auto p-4 sm:p-6 font-mono text-[11px] sm:text-xs leading-relaxed text-slate-300 space-y-4 select-text custom-scrollbar scroll-smooth bg-[#0A0D14]"
             >
               {/* Authentic ASCII Banner */}
-              <div className="p-4 rounded-xl bg-[#06080F] border border-[#536DFE]/30 text-center select-none shadow-lg mb-6">
-                <pre className="text-[#536DFE] font-bold text-[8px] sm:text-[10px] leading-tight inline-block opacity-90 drop-shadow-[0_0_8px_rgba(83,109,254,0.3)]">
+              <div className="p-4 rounded-xl bg-[#06080F] border border-[#536DFE]/50 text-center select-none shadow-lg mb-6">
+                <pre className="text-[#536DFE] font-bold text-[8px] sm:text-[10px] leading-tight inline-block opacity-95 drop-shadow-[0_0_8px_rgba(83,109,254,0.3)]">
                   {ASCII_BANNER}
                 </pre>
-                <div className="mt-3 text-[10px] sm:text-[11px] text-slate-300 font-medium border-t border-white/[0.06] pt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
-                    Mode: <span className="text-[#38BDF8] font-bold">EXPERT</span>
+                <div className="mt-2.5 text-[10px] text-slate-400 font-medium">
+                  <span className="text-slate-200">v3.0.0</span>
+                  <span className="mx-2 text-slate-600">·</span>
+                  <span className="text-[#536DFE] font-semibold">DeepSeek-V4.1-Flash</span>
+                  <span className="ml-1.5 text-slate-500">(284B / 13B)</span>
+                </div>
+                <div className="mt-2 text-[10px] sm:text-[11px] text-slate-300 font-medium border-t border-white/[0.08] pt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                  <span>
+                    Mode: <span className="text-[#A78BFA] font-bold">Think</span>
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" />
-                    Style: <span className="text-[#A78BFA] font-bold">CODER</span>
+                  <span className="text-slate-600">·</span>
+                  <span>
+                    Style: <span className="text-[#A78BFA] font-bold">Coder</span>
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#34A853]" />
-                    DeepThink: <span className="text-[#34A853] font-bold">ON</span>
+                  <span className="text-slate-600">·</span>
+                  <span>
+                    Think: <span className="text-[#38BDF8] font-bold">ON</span>
+                  </span>
+                  <span className="text-slate-600">·</span>
+                  <span>
+                    Search: <span className="text-slate-500 font-bold">OFF</span>
                   </span>
                 </div>
               </div>
 
               {/* User Input Line */}
               <div className="flex items-start text-white bg-white/[0.02] p-2 rounded-lg border border-white/[0.05]">
-                <span className="text-[#536DFE] font-bold mr-2 select-none shrink-0">deepx&gt;</span>
+                <span className="text-[#A78BFA] font-bold mr-2 select-none shrink-0">[think]</span>
+                <span className="text-[#536DFE] font-bold mr-2 select-none shrink-0">›</span>
                 <span className="break-words font-medium">{typedUser}</span>
                 {typedUser.length < scenario.userPrompt.length && (
                   <span className="w-2 h-4 bg-[#536DFE] ml-1 inline-block animate-pulse shrink-0 translate-y-0.5" />
@@ -462,8 +472,8 @@ export const TerminalSimulator: React.FC = () => {
                 {scenario.steps.slice(0, currentStepIndex).map((step, idx) => {
                   if (step.type === 'think') {
                     return (
-                      <div key={idx} className="text-[#A78BFA] flex items-start gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <span className="select-none text-sm opacity-80">🤔</span>
+                      <div key={idx} className="text-[#A78BFA] flex items-start gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <span className="select-none text-xs text-[#A78BFA]/80 font-bold shrink-0">~</span>
                         <span className="leading-relaxed"><strong className="opacity-70 font-normal">[DeepThink]</strong> {step.content}</span>
                       </div>
                     );
@@ -498,9 +508,9 @@ export const TerminalSimulator: React.FC = () => {
                             <div key={task.id} className="flex items-start gap-2.5 text-xs">
                               <span className="text-slate-600 font-mono w-4 shrink-0 text-right">{task.id}.</span>
                               {task.status === 'done' ? (
-                                <span className="text-[#34A853] font-bold shrink-0">[✓]</span>
+                                <span className="text-[#22C55E] font-bold shrink-0">[x]</span>
                               ) : task.status === 'active' ? (
-                                <span className="text-[#FDE68A] font-bold shrink-0 animate-pulse drop-shadow-[0_0_4px_rgba(253,230,138,0.5)]">[▶]</span>
+                                <span className="text-[#FDE68A] font-bold shrink-0 animate-pulse">[&gt;]</span>
                               ) : (
                                 <span className="text-slate-600 shrink-0">[ ]</span>
                               )}
@@ -526,7 +536,7 @@ export const TerminalSimulator: React.FC = () => {
                     return (
                       <div key={idx} className="space-y-1.5 text-xs animate-in fade-in slide-in-from-left-2 duration-300">
                         <div className="text-[#38BDF8] flex items-center gap-2 font-medium bg-[#38BDF8]/10 w-fit px-2 py-1 rounded border border-[#38BDF8]/20">
-                          <span className="animate-spin-slow">⚙</span>
+                          <Cpu className="w-3.5 h-3.5 shrink-0" />
                           <span>{step.toolName}</span>
                         </div>
                         {step.toolOutput && (
@@ -606,7 +616,8 @@ export const TerminalSimulator: React.FC = () => {
               {/* Ready prompt cursor */}
               {currentStepIndex >= scenario.steps.length && (
                 <div className="flex items-center text-white pt-4 animate-in fade-in duration-1000">
-                  <span className="text-[#536DFE] font-bold mr-2 select-none shrink-0">deepx&gt;</span>
+                  <span className="text-[#A78BFA] font-bold mr-2 select-none shrink-0">[think]</span>
+                  <span className="text-[#536DFE] font-bold mr-2 select-none shrink-0">›</span>
                   <span className="w-2 h-4 bg-[#536DFE] inline-block animate-pulse shadow-[0_0_8px_rgba(83,109,254,0.6)]" />
                 </div>
               )}

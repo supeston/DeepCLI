@@ -11,12 +11,12 @@ export const DownloadSection: React.FC = () => {
       code: 'git clone https://github.com/supeston/DeepCLI.git\ncd DeepCLI',
     },
     {
-      title: '2. Launch in 1 Click (Windows)',
-      code: 'cscript run_cli.vbs\n# Or double-click run_cli.vbs in File Explorer',
+      title: '2. Launch & Auto-Setup (Windows)',
+      code: 'start.bat\n# Or cscript run_cli.vbs for Windows Terminal (110x30)',
     },
     {
-      title: '3. Alternative: Run via Python Module',
-      code: 'python deepx/install.py\npython -m deepx',
+      title: '3. Manual Setup & Self-Update',
+      code: 'python deepx/install.py\npython deepx/deep_cli.py --update',
     },
   ];
 

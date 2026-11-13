@@ -53,9 +53,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full flex-1 flex flex-col justify-between items-center text-center">
         {/* Top/Middle Group: Logo + Live Typing Title + Action Buttons */}
         <div className="max-w-4xl mx-auto my-auto flex flex-col items-center w-full">
-          {/* 1. Centered Brand Artwork */}
+          {/* 1. Centered Brand Artwork & Version */}
           <div
-            className={`flex items-center justify-center gap-3 mb-4 sm:mb-6 transition-all duration-600 ease-out delay-[600ms] ${
+            className={`flex flex-col items-center justify-center gap-2.5 mb-4 sm:mb-6 transition-all duration-600 ease-out delay-[600ms] ${
               typingDone
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 -translate-y-6 pointer-events-none'
@@ -69,6 +69,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
                 (e.target as HTMLImageElement).src = 'logo.png';
               }}
             />
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#536DFE]" />
+              v3.0.0 · AST Repo Map · Auto-Update
+            </span>
           </div>
 
           {/* 2. Main Headline with Live Human Typing */}
