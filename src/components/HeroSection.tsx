@@ -130,32 +130,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onTypingComplete }) =>
                 : 'shadow-lg shadow-gray-200/50'
             }`}
           >
-            {/* Animated SVG Border Beam */}
             {copied && (
-              <svg
-                className="absolute inset-0 w-full h-full pointer-events-none rounded-2xl z-20"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <defs>
-                  <linearGradient id="copy-beam-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#536DFE" stopOpacity="1" />
-                    <stop offset="60%" stopColor="#38BDF8" stopOpacity="1" />
-                    <stop offset="100%" stopColor="#536DFE" stopOpacity="0.2" />
-                  </linearGradient>
-                </defs>
-                <rect
-                  x="1"
-                  y="1"
-                  width="calc(100% - 2px)"
-                  height="calc(100% - 2px)"
-                  rx="16"
-                  fill="none"
-                  stroke="url(#copy-beam-grad)"
-                  strokeWidth="2.5"
-                  pathLength="100"
-                  className="animate-copy-beam"
-                />
-              </svg>
+              <>
+                <span className="copy-beam" />
+                <span className="copy-beam copy-beam-glow" />
+              </>
             )}
 
             <div className="flex items-center gap-2.5 sm:gap-3 overflow-hidden text-[11px] sm:text-xs font-mono text-gray-600">

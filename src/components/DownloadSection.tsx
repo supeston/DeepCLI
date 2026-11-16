@@ -48,8 +48,14 @@ export const DownloadSection: React.FC = () => {
                 {steps.map((step, idx) => (
                   <div
                     key={idx}
-                    className="rounded-2xl bg-slate-50/90 border border-slate-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    className="relative rounded-2xl bg-slate-50/90 border border-slate-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                   >
+                    {copiedIndex === idx && (
+                      <>
+                        <span className="copy-beam" />
+                        <span className="copy-beam copy-beam-glow" />
+                      </>
+                    )}
                     <div className="space-y-1.5 flex-1">
                       <div className="text-xs font-medium text-slate-500">
                         {step.title}

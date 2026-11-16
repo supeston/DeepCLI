@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Terminal, Bot, Workflow, MousePointerClick, ArrowRight, ShieldCheck, CheckCircle2, Layers } from 'lucide-react';
 import { ScrollReveal, TextScrollReveal } from './ScrollReveal';
 
@@ -6,6 +6,21 @@ type FeatureTab = 'cli' | 'reasoning' | 'workflows' | 'clipboard';
 
 export const BentoGrid: React.FC = () => {
   const [activeTab, setActiveTab] = useState<FeatureTab>('cli');
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const tabEls = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [pill, setPill] = useState({ x: 0, y: 0, w: 0, h: 0, ready: false });
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = tabEls.current[activeTab];
+      const bar = barRef.current;
+      if (!el || !bar) return;
+      setPill({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight, ready: true });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [activeTab]);
 
   const tabs = [
     { id: 'cli', label: 'Command Line', icon: Terminal, color: 'text-[#536DFE]' },
@@ -119,22 +134,32 @@ export const BentoGrid: React.FC = () => {
 
         {/* Feature Tabs */}
         <ScrollReveal direction="up" delay={250}>
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-12">
+          <div ref={barRef} className="relative flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-12">
+            {pill.ready && (
+              <span
+                aria-hidden="true"
+                className="tb-pill"
+                style={{ width: pill.w, height: pill.h, transform: `translate(${pill.x}px, ${pill.y}px)` }}
+              />
+            )}
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  ref={(el) => {
+                    tabEls.current[tab.id] = el;
+                  }}
                   onClick={() => setActiveTab(tab.id)}
                   data-testid={`feature-tab-${tab.id}`}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-medium transition-colors duration-200 cursor-pointer ${
+                  className={`relative z-10 flex items-center gap-2 px-5 py-3 rounded-full text-sm font-medium transition-colors duration-300 cursor-pointer ${
                     isActive
-                      ? 'bg-[#111318] text-white shadow-md'
+                      ? 'text-white'
                       : 'bg-white/85 text-slate-600 hover:bg-white border border-slate-200/90'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#536DFE]' : tab.color}`} />
+                  <Icon className={`w-4 h-4 transition-all duration-500 ${isActive ? 'text-[#7C93FF] tb-icon-on' : tab.color}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -144,15 +169,23 @@ export const BentoGrid: React.FC = () => {
 
         {/* Active Feature Content */}
         <ScrollReveal direction="up" delay={350}>
+         <div data-unfold className="tb-unfold">
           <div className="deepx-card p-8 sm:p-12 relative overflow-hidden">
             <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center relative z-10">
-              <div className="lg:col-span-6">
+              <div key={activeTab} className="lg:col-span-6 tb-col">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200/80 text-[11px] font-mono font-medium mb-4">
                   <Layers className="w-3.5 h-3.5 text-[#536DFE]" />
                   <span>{active.specTag}</span>
                 </div>
                 <h3 className="text-3xl font-normal text-[#111318] mb-5 tracking-tight">
-                  {active.title}
+                  <span className="sr-only">{active.title}</span>
+                  <span aria-hidden="true">
+                    {active.title.split(' ').map((w, i) => (
+                      <span key={i} className="tb-word" style={{ ['--i' as string]: i }}>
+                        {w}
+                      </span>
+                    ))}
+                  </span>
                 </h3>
                 <p className="text-[#475569] text-base sm:text-lg leading-relaxed mb-8 font-normal">
                   {active.desc}
@@ -177,8 +210,8 @@ export const BentoGrid: React.FC = () => {
               </div>
 
               {/* Authentic Product Surface Preview (No skeleton bars) */}
-              <div className="lg:col-span-6">
-                <div className="rounded-2xl bg-[#0A0D14] border border-slate-800 shadow-2xl overflow-hidden font-mono text-xs">
+              <div key={activeTab + '-t'} className="lg:col-span-6 tb-term-wrap">
+                <div className="tb-term rounded-2xl bg-[#0A0D14] border border-slate-800 shadow-2xl overflow-hidden font-mono text-xs">
                   <div className="bg-[#121622] px-4 py-3 border-b border-white/[0.08] flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]" />
@@ -191,11 +224,12 @@ export const BentoGrid: React.FC = () => {
                     <ShieldCheck className="w-4 h-4 text-[#536DFE]" />
                   </div>
 
-                  <div className="p-5 sm:p-6 space-y-2.5">
+                  <div className="tb-scan p-5 sm:p-6 space-y-2.5">
                     {active.previewLines.map((row, idx) => (
                       <div
                         key={idx}
-                        className={`px-3.5 py-2.5 rounded-xl flex items-center gap-3 ${
+                        style={{ ['--i' as string]: idx }}
+                        className={`tb-line px-3.5 py-2.5 rounded-xl flex items-center gap-3 ${
                           idx === 0 ? row.tone : `bg-white/[0.03] border border-white/[0.06] ${row.tone}`
                         }`}
                       >
@@ -216,6 +250,7 @@ export const BentoGrid: React.FC = () => {
               </div>
             </div>
           </div>
+         </div>
         </ScrollReveal>
       </div>
     </section>

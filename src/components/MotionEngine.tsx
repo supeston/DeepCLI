@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import Lenis from 'lenis';
 
 const CARD_VARIANTS = ['rise', 'left', 'right', 'zoom', 'flip'];
 const RAIL = [
@@ -9,12 +10,16 @@ const RAIL = [
   { id: 'comparison', label: 'Compare' },
   { id: 'download', label: 'Download' },
 ];
+const STEP = 30;
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 export const MotionEngine: React.FC = () => {
-  const [active, setActive] = useState<string>('');
   const [railIds, setRailIds] = useState<string[]>([]);
+  const railRef = useRef<HTMLElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
+  const fillRef = useRef<HTMLDivElement | null>(null);
+  const labelRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
@@ -23,6 +28,18 @@ export const MotionEngine: React.FC = () => {
     const root = document.documentElement;
     if (reduce) return;
     root.classList.add('m-on');
+
+    const lenis = new Lenis({ lerp: 0.065, smoothWheel: true, wheelMultiplier: 0.9, autoRaf: false });
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+      if (arg && typeof arg === 'object' && arg.behavior === 'smooth') {
+        lenis.scrollTo(this as HTMLElement, { offset: -72, duration: 1.7, easing: (t: number) => 1 - Math.pow(1 - t, 4) });
+      } else {
+        origScrollIntoView.call(this, arg as boolean | ScrollIntoViewOptions | undefined);
+      }
+    };
+    const onHash = () => lenis.scrollTo(0, { immediate: true, force: true });
+    window.addEventListener('hashchange', onHash);
 
     const io = new IntersectionObserver(
       (entries) => {
@@ -44,6 +61,11 @@ export const MotionEngine: React.FC = () => {
       io.observe(el);
     };
 
+    let heroEl: HTMLElement | null = null;
+    let secEls: HTMLElement[] = [];
+    let unfoldEls: HTMLElement[] = [];
+    let btnEls: HTMLElement[] = [];
+
     const scan = () => {
       const main = document.querySelector('main');
       if (main) {
@@ -61,18 +83,26 @@ export const MotionEngine: React.FC = () => {
         main.querySelectorAll('.deepx-card').forEach((c, i) => {
           if (!c.closest('section')) mark(c, 'card', i % 3, CARD_VARIANTS[i % CARD_VARIANTS.length]);
         });
-        main.querySelectorAll('tbody tr').forEach((r, i) => mark(r, 'row', i));
+        main.querySelectorAll('.cmp-row').forEach((r, i) => mark(r, 'row', i));
         main.querySelectorAll('.deepx-card li').forEach((l) => {
           const sibs = l.parentElement ? Array.from(l.parentElement.children) : [];
           mark(l, 'li', sibs.indexOf(l) + 2);
         });
         main.querySelectorAll('.deepx-card svg.lucide, .deepx-card img').forEach((n, i) => mark(n, 'pop', 1 + (i % 3)));
+        main.querySelectorAll('.overflow-y-auto').forEach((n) => n.setAttribute('data-lenis-prevent', ''));
       }
       document.querySelectorAll('footer').forEach((f) => {
         mark(f, 'foot');
         f.querySelectorAll('a').forEach((a, i) => mark(a, 'li', i));
       });
-      setRailIds(RAIL.filter((r) => document.getElementById(r.id)).map((r) => r.id));
+      heroEl = document.querySelector<HTMLElement>('main section[class*="min-h-"] > div');
+      secEls = Array.from(document.querySelectorAll<HTMLElement>('[data-m="section"]'));
+      unfoldEls = Array.from(document.querySelectorAll<HTMLElement>('[data-unfold]'));
+      btnEls = Array.from(document.querySelectorAll<HTMLElement>('.google-btn-primary,.google-btn-indigo,.google-btn-secondary'));
+      setRailIds((prev) => {
+        const next = RAIL.filter((r) => document.getElementById(r.id)).map((r) => r.id);
+        return prev.join() === next.join() ? prev : next;
+      });
     };
 
     let scanQueued = false;
@@ -88,9 +118,7 @@ export const MotionEngine: React.FC = () => {
     const mo = new MutationObserver(queueScan);
     mo.observe(document.body, { childList: true, subtree: true });
 
-    let sy = window.scrollY;
     let vel = 0;
-    let ticking = true;
     let raf = 0;
     const bar = document.getElementById('m-progress');
     const aura = document.getElementById('m-aura');
@@ -98,30 +126,44 @@ export const MotionEngine: React.FC = () => {
     let mx = window.innerWidth / 2, my = window.innerHeight / 2;
     let ax = mx, ay = my, rx = mx, ry = my;
     let marqueeX = 0;
+    let tf = 0;
+    let lastIdx = -1;
+    let barP = 0;
 
-    const frame = () => {
+    const frame = (time: number) => {
       raf = requestAnimationFrame(frame);
+      lenis.raf(time);
       const y = window.scrollY;
-      vel += (y - sy - vel) * 0.12;
-      sy = y;
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (bar) bar.style.transform = `scaleX(${max > 0 ? clamp(y / max, 0, 1) : 0})`;
+      vel += (lenis.velocity - vel) * 0.12;
+      const vh = window.innerHeight;
+      const max = document.documentElement.scrollHeight - vh;
+      const target = max > 0 ? clamp(y / max, 0, 1) : 0;
+      barP += (target - barP) * 0.14;
+      if (bar) bar.style.transform = `scaleX(${barP.toFixed(4)})`;
 
-      const hero = document.querySelector<HTMLElement>('main section[class*="min-h-"] > div');
-      if (hero) {
-        const p = clamp(y / (window.innerHeight * 0.9), 0, 1);
-        hero.style.translate = `0 ${p * 90}px`;
-        hero.style.scale = `${1 - p * 0.06}`;
-        hero.style.filter = p > 0.01 ? `blur(${p * 5}px)` : '';
-        hero.style.opacity = `${1 - p * 0.85}`;
+      if (heroEl) {
+        const p = clamp(y / (vh * 0.9), 0, 1);
+        heroEl.style.translate = `0 ${(p * 90).toFixed(1)}px`;
+        heroEl.style.scale = `${(1 - p * 0.06).toFixed(4)}`;
+        heroEl.style.filter = p > 0.01 ? `blur(${(p * 5).toFixed(2)}px)` : '';
+        heroEl.style.opacity = `${(1 - p * 0.85).toFixed(3)}`;
       }
 
-      document.querySelectorAll<HTMLElement>('[data-m="section"][data-in]').forEach((s) => {
+      for (const s of secEls) {
+        if (!s.hasAttribute('data-in')) continue;
         const r = s.getBoundingClientRect();
-        if (r.bottom < -200 || r.top > window.innerHeight + 200) return;
-        const c = (r.top + r.height / 2 - window.innerHeight / 2) / window.innerHeight;
-        s.style.setProperty('--sp', `${(c * -40).toFixed(1)}px`);
-      });
+        if (r.bottom < -200 || r.top > vh + 200) continue;
+        s.style.setProperty('--sp', `${(((r.top + r.height / 2 - vh / 2) / vh) * -40).toFixed(1)}px`);
+      }
+
+      for (const u of unfoldEls) {
+        const r = u.getBoundingClientRect();
+        if (r.bottom < -100 || r.top > vh + 100) continue;
+        const p = clamp((vh - r.top) / (vh * 0.75), 0, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        u.style.transform = `perspective(1400px) rotateX(${((1 - e) * 16).toFixed(2)}deg) translateY(${((1 - e) * 60).toFixed(1)}px) scale(${(0.9 + 0.1 * e).toFixed(4)})`;
+        u.style.transformOrigin = '50% 0%';
+      }
 
       marqueeX -= 0.6 + Math.abs(vel) * 0.35;
       document.querySelectorAll<HTMLElement>('[data-marquee]').forEach((t) => {
@@ -141,16 +183,38 @@ export const MotionEngine: React.FC = () => {
         if (ring) ring.style.transform = `translate3d(${rx - 18}px,${ry - 18}px,0)`;
       }
 
-      let cur = '';
-      for (const r of RAIL) {
-        const el = document.getElementById(r.id);
-        if (!el) continue;
-        if (el.getBoundingClientRect().top < window.innerHeight * 0.45) cur = r.id;
+      const rail = railRef.current;
+      const thumb = thumbRef.current;
+      if (rail && thumb) {
+        const els = RAIL.map((r) => document.getElementById(r.id));
+        const present = els.map((e, i) => ({ e, i })).filter((o) => o.e) as { e: HTMLElement; i: number }[];
+        if (present.length) {
+          const ref = vh * 0.5;
+          const tops = present.map((o) => o.e.getBoundingClientRect().top);
+          let idx = -1;
+          for (let k = 0; k < tops.length; k++) if (tops[k] <= ref) idx = k;
+          let f = 0;
+          if (idx >= 0) {
+            f = idx >= tops.length - 1 ? tops.length - 1 : idx + clamp((ref - tops[idx]) / (tops[idx + 1] - tops[idx]), 0, 1);
+          }
+          tf += (f - tf) * 0.1;
+          const py = tf * STEP;
+          thumb.style.transform = `translate3d(-50%,${py.toFixed(2)}px,0)`;
+          if (fillRef.current) fillRef.current.style.transform = `scaleY(${(py / Math.max(1, (present.length - 1) * STEP)).toFixed(4)})`;
+          const near = clamp(Math.round(tf), 0, present.length - 1);
+          if (near !== lastIdx) {
+            lastIdx = near;
+            if (labelRef.current) labelRef.current.textContent = RAIL[present[near].i].label;
+            rail.querySelectorAll('button').forEach((b, bi) => b.classList.toggle('on', bi === near));
+          }
+          rail.style.opacity = y > vh * 0.5 ? '1' : '0';
+          rail.style.pointerEvents = y > vh * 0.5 ? 'auto' : 'none';
+        }
       }
-      setActive((prev) => (prev === cur ? prev : cur));
     };
     raf = requestAnimationFrame(frame);
 
+    let lastCard: HTMLElement | null = null;
     const onMove = (e: PointerEvent) => {
       mx = e.clientX;
       my = e.clientY;
@@ -158,37 +222,42 @@ export const MotionEngine: React.FC = () => {
       if (ring && ring.style.opacity !== '1') ring.style.opacity = '1';
       const t = e.target as HTMLElement | null;
       if (!t || !t.closest) return;
-      const hot = t.closest('a,button,[role="button"],.cursor-pointer');
-      ring?.classList.toggle('hot', !!hot);
+      ring?.classList.toggle('hot', !!t.closest('a,button,[role="button"],.cursor-pointer'));
 
       const card = t.closest<HTMLElement>('.deepx-card');
+      if (lastCard && lastCard !== card) lastCard.style.transform = '';
+      lastCard = card;
       if (card) {
         const r = card.getBoundingClientRect();
         const px = e.clientX - r.left, py = e.clientY - r.top;
         card.style.setProperty('--mx', `${px}px`);
         card.style.setProperty('--my', `${py}px`);
         if (r.width < 520 && r.height < 520) {
-          const rxd = ((py / r.height) - 0.5) * -7;
-          const ryd = ((px / r.width) - 0.5) * 7;
-          card.style.transform = `perspective(900px) rotateX(${rxd.toFixed(2)}deg) rotateY(${ryd.toFixed(2)}deg)`;
+          card.style.transform = `perspective(900px) rotateX(${(((py / r.height) - 0.5) * -6).toFixed(2)}deg) rotateY(${(((px / r.width) - 0.5) * 6).toFixed(2)}deg)`;
         }
       }
-      document.querySelectorAll<HTMLElement>('.deepx-card').forEach((c) => {
-        if (c !== card && c.style.transform) c.style.transform = '';
-      });
 
-      document.querySelectorAll<HTMLElement>('.google-btn-primary,.google-btn-indigo,.google-btn-secondary').forEach((b) => {
+      for (const b of btnEls) {
         const r = b.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        const dx = e.clientX - cx, dy = e.clientY - cy;
-        const dist = Math.hypot(dx, dy);
-        const reach = Math.max(r.width, r.height) * 0.9;
-        b.style.translate = dist < reach ? `${(dx * 0.22).toFixed(1)}px ${(dy * 0.3).toFixed(1)}px` : '';
-      });
+        if (r.width > 260) {
+          if (b.style.translate) b.style.translate = '';
+          continue;
+        }
+        const pad = 22;
+        const inside = e.clientX > r.left - pad && e.clientX < r.right + pad && e.clientY > r.top - pad && e.clientY < r.bottom + pad;
+        if (inside) {
+          const dx = clamp((e.clientX - (r.left + r.width / 2)) * 0.14, -6, 6);
+          const dy = clamp((e.clientY - (r.top + r.height / 2)) * 0.2, -4, 4);
+          b.style.translate = `${dx.toFixed(1)}px ${dy.toFixed(1)}px`;
+        } else if (b.style.translate) {
+          b.style.translate = '';
+        }
+      }
     };
     const onLeave = () => {
       if (aura) aura.style.opacity = '0';
       if (ring) ring.style.opacity = '0';
+      btnEls.forEach((b) => (b.style.translate = ''));
     };
     if (fine) {
       window.addEventListener('pointermove', onMove, { passive: true });
@@ -203,39 +272,45 @@ export const MotionEngine: React.FC = () => {
     }, 2500);
 
     return () => {
-      ticking = false;
-      void ticking;
       cancelAnimationFrame(raf);
       io.disconnect();
       mo.disconnect();
       clearTimeout(safety);
+      lenis.destroy();
+      Element.prototype.scrollIntoView = origScrollIntoView;
+      window.removeEventListener('hashchange', onHash);
       window.removeEventListener('pointermove', onMove);
       document.documentElement.removeEventListener('pointerleave', onLeave);
       root.classList.remove('m-on');
     };
   }, []);
 
+  const items = RAIL.filter((r) => railIds.includes(r.id));
+
   return (
     <>
       <div id="m-progress" aria-hidden="true" />
       <div id="m-aura" aria-hidden="true" />
       <div id="m-ring" aria-hidden="true" />
-      {railIds.length > 0 && (
-        <nav className="m-rail" aria-label="Sections">
-          {RAIL.filter((r) => railIds.includes(r.id)).map((r) => (
+      <nav className="m-rail" ref={railRef} aria-label="Sections" style={{ opacity: 0 }}>
+        <div className="m-rail-track" style={{ height: Math.max(0, items.length - 1) * STEP }}>
+          <div className="m-rail-line" />
+          <div className="m-rail-fill" ref={fillRef} style={{ height: Math.max(0, items.length - 1) * STEP }} />
+          {items.map((r, i) => (
             <button
               key={r.id}
               type="button"
-              className={active === r.id ? 'on' : ''}
+              className="m-rail-dot"
+              style={{ top: i * STEP }}
               onClick={() => document.getElementById(r.id)?.scrollIntoView({ behavior: 'smooth' })}
               aria-label={r.label}
-            >
-              <span>{r.label}</span>
-              <i />
-            </button>
+            />
           ))}
-        </nav>
-      )}
+          <div className="m-rail-thumb" ref={thumbRef}>
+            <span ref={labelRef}>{items[0]?.label}</span>
+          </div>
+        </div>
+      </nav>
     </>
   );
 };
