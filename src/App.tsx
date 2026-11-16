@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { ParticleCanvas } from './components/ParticleCanvas';
+import { MotionEngine } from './components/MotionEngine';
 import { Footer } from './components/Footer';
 
 import { HomePage } from './pages/HomePage';
@@ -16,6 +17,7 @@ export function App() {
       <div className="relative min-h-screen bg-[#FAFAFC] text-[#111318] selection:bg-[#536DFE]/20 selection:text-[#536DFE]">
         {/* DeepX Kinetic Coordinate & Signal Field */}
         <ParticleCanvas />
+        <MotionEngine />
 
         {/* Navigation - slides down from top after hero headline typing completes */}
         <Navbar isVisible={introComplete} />

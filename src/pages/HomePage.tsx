@@ -5,6 +5,7 @@ import { BentoGrid } from '../components/BentoGrid';
 import { UseCasesSection } from '../components/UseCasesSection';
 import { PricingSection } from '../components/PricingSection';
 import { ComparisonTable } from '../components/ComparisonTable';
+import { Marquee } from '../components/MotionEngine';
 import { DownloadSection } from '../components/DownloadSection';
 
 interface HomePageProps {
@@ -15,6 +16,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onIntroComplete }) => {
   return (
     <>
       <HeroSection onTypingComplete={onIntroComplete} />
+      <Marquee />
       <TerminalSimulator />
       <BentoGrid />
       <UseCasesSection />
